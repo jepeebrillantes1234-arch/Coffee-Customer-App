@@ -107,7 +107,7 @@ class _PromosScreenState extends State<PromosScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Promos'),
         actions: [
@@ -160,9 +160,9 @@ class _PromosScreenState extends State<PromosScreen> {
     if (_promos.isEmpty) {
       return ListView(
         physics: scroll,
-        children: const [
+        children: [
           SizedBox(height: 130),
-          Icon(Icons.local_offer_outlined, size: 48, color: Color(0xFF9A9189)),
+          Icon(Icons.local_offer_outlined, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
           SizedBox(height: 14),
           Center(child: Text('No promos available right now.')),
         ],

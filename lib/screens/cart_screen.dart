@@ -14,14 +14,14 @@ class CartScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(title: const Text('Cart')),
       body: ListenableBuilder(
         listenable: Cart.I,
         builder: (_, _) {
           final lines = Cart.I.lines;
           if (lines.isEmpty) {
-            return const Center(
+            return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -38,7 +38,7 @@ class CartScreen extends StatelessWidget {
                   SizedBox(height: 4),
                   Text(
                     'Browse the menu and add your favorites.',
-                    style: TextStyle(color: Colors.black54),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -72,7 +72,7 @@ class CartScreen extends StatelessWidget {
                                 line.name,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -80,9 +80,9 @@ class CartScreen extends StatelessWidget {
                               const SizedBox(height: 4),
                               Text(
                                 peso(line.unitPrice),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.black87,
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
                               if (line.optionNames.isNotEmpty)
@@ -90,9 +90,9 @@ class CartScreen extends StatelessWidget {
                                   line.optionNames.join(', '),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 10,
-                                    color: Colors.black54,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               if (line.notes != null &&
@@ -101,9 +101,9 @@ class CartScreen extends StatelessWidget {
                                   'Note: ${line.notes}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 10,
-                                    color: Colors.black54,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               const SizedBox(height: 7),
@@ -111,7 +111,7 @@ class CartScreen extends StatelessWidget {
                                 height: 28,
                                 decoration: BoxDecoration(
                                   border: Border.all(
-                                    color: const Color(0xFFE7E0DA),
+                                    color: Theme.of(context).dividerColor,
                                   ),
                                   borderRadius: BorderRadius.circular(16),
                                 ),
@@ -119,6 +119,7 @@ class CartScreen extends StatelessWidget {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     _qtyButton(
+                                      context,
                                       Icons.remove,
                                       () => Cart.I.setQty(index, line.qty - 1),
                                     ),
@@ -134,6 +135,7 @@ class CartScreen extends StatelessWidget {
                                       ),
                                     ),
                                     _qtyButton(
+                                      context,
                                       Icons.add,
                                       () => Cart.I.setQty(index, line.qty + 1),
                                     ),
@@ -158,20 +160,20 @@ class CartScreen extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.tune_rounded,
                                 size: 17,
-                                color: espresso,
+                                color: Theme.of(context).colorScheme.primary,
                               ),
                             ),
                             IconButton(
                               tooltip: 'Remove item',
                               visualDensity: VisualDensity.compact,
                               onPressed: () => Cart.I.setQty(index, 0),
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.delete_outline_rounded,
                                 size: 19,
-                                color: Color(0xFF7C6C62),
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -186,29 +188,30 @@ class CartScreen extends StatelessWidget {
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(18, 13, 18, 14),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    border: Border(top: BorderSide(color: Color(0xFFECE7E2))),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _summaryRow('Subtotal', peso(Cart.I.subtotal)),
+                      _summaryRow(context, 'Subtotal', peso(Cart.I.subtotal)),
                       const SizedBox(height: 7),
                       _summaryRow(
+                        context,
                         'Delivery Fee',
                         'Calculated at checkout',
                         muted: true,
                       ),
                       const Divider(height: 20),
-                      _summaryRow('Total', peso(Cart.I.subtotal), bold: true),
+                      _summaryRow(context, 'Total', peso(Cart.I.subtotal), bold: true),
                       const SizedBox(height: 13),
                       SizedBox(
                         width: double.infinity,
                         height: 48,
                         child: FilledButton(
                           style: FilledButton.styleFrom(
-                            backgroundColor: espresso,
+                            backgroundColor: Theme.of(context).colorScheme.primary,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -238,18 +241,19 @@ class CartScreen extends StatelessWidget {
     );
   }
 
-  static Widget _qtyButton(IconData icon, VoidCallback onPressed) => SizedBox(
+  static Widget _qtyButton(BuildContext context, IconData icon, VoidCallback onPressed) => SizedBox(
     width: 28,
     height: 26,
     child: IconButton(
       padding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
       onPressed: onPressed,
-      icon: Icon(icon, size: 15, color: espresso),
+      icon: Icon(icon, size: 15, color: Theme.of(context).colorScheme.primary),
     ),
   );
 
   static Widget _summaryRow(
+    BuildContext context,
     String label,
     String value, {
     bool bold = false,
@@ -262,7 +266,7 @@ class CartScreen extends StatelessWidget {
         style: TextStyle(
           fontSize: bold ? 16 : 13,
           fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
-          color: muted ? Colors.black54 : Colors.black87,
+          color: muted ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.onSurface,
         ),
       ),
       Text(
@@ -270,7 +274,7 @@ class CartScreen extends StatelessWidget {
         style: TextStyle(
           fontSize: bold ? 16 : 13,
           fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
-          color: muted ? Colors.black54 : Colors.black87,
+          color: muted ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.onSurface,
         ),
       ),
     ],

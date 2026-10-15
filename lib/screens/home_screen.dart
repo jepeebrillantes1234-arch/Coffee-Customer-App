@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
+import '../core/realtime.dart';
 import '../core/animated_add_button.dart';
 import '../core/theme.dart';
 import '../core/util.dart';
@@ -28,7 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = true;
   String? _error;
   int _unread = 0;
-  Timer? _bell;
+  StreamSubscription<Map<String, dynamic>>? _liveSubscription;
 
   @override
   void initState() {
@@ -36,14 +37,18 @@ class _HomeScreenState extends State<HomeScreen> {
     _load();
     Favorites.I.load();
     _loadUnread();
-    _bell = Timer.periodic(const Duration(seconds: 20), (_) => _loadUnread());
+    Realtime.I.connect();
+    _liveSubscription = Realtime.I.updates.listen((event) {
+      if (event['kind'] == 'notification') _loadUnread();
+      if (['product', 'category', 'promo'].contains(event['kind'])) _load();
+    });
     rootTab.addListener(_onTab);
   }
 
   @override
   void dispose() {
     rootTab.removeListener(_onTab);
-    _bell?.cancel();
+    _liveSubscription?.cancel();
     super.dispose();
   }
 
@@ -106,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: cream,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
@@ -124,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _header() {
     return Container(
-      color: cream,
+      color: Theme.of(context).colorScheme.surface,
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -136,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   IconButton(
                     tooltip: 'Open menu',
                     onPressed: () => rootScaffoldKey.currentState?.openDrawer(),
-                    icon: const Icon(Icons.menu_rounded, color: espresso),
+                    icon: Icon(Icons.menu_rounded, color: Theme.of(context).colorScheme.primary),
                   ),
                   const Spacer(),
                   IconButton(
@@ -144,9 +149,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: Badge(
                       isLabelVisible: _unread > 0,
                       label: Text('$_unread'),
-                      child: const Icon(
+                      child: Icon(
                         Icons.notifications_none,
-                        color: espresso,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                     ),
                     onPressed: () async {
@@ -211,8 +216,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   FilledButton(
                     onPressed: () => _goMenu(),
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFFFFCF7),
-                      foregroundColor: espresso,
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                      foregroundColor: Theme.of(context).colorScheme.onSurface,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 9,
@@ -249,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Container(
-      color: cream,
+      color: Theme.of(context).colorScheme.surface,
       padding: const EdgeInsets.fromLTRB(0, 8, 0, 4),
       child: Column(
         children: [
@@ -259,10 +264,10 @@ class _HomeScreenState extends State<HomeScreen> {
               Expanded(
                 child: Container(
                   height: 1.5,
-                  color: espresso.withValues(alpha: 0.5),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
                 ),
               ),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: 12),
                 child: Text(
                   'Categories',
@@ -270,14 +275,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     fontFamily: _serif,
                     fontStyle: FontStyle.italic,
                     fontSize: 21,
-                    color: espresso,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ),
               Expanded(
                 child: Container(
                   height: 1.5,
-                  color: espresso.withValues(alpha: 0.5),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
                 ),
               ),
               const SizedBox(width: 16),
@@ -316,19 +321,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ],
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.apps_rounded,
-                              color: espresso,
+                              color: Theme.of(context).colorScheme.primary,
                               size: 27,
                             ),
                           ),
                           const SizedBox(height: 6),
-                          const Text(
+                          Text(
                             'All',
                             style: TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w600,
-                              color: espresso,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ],
@@ -377,11 +382,11 @@ class _HomeScreenState extends State<HomeScreen> {
                               '${c['name']}'.toUpperCase(),
                               textAlign: TextAlign.center,
                               maxLines: 2,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 10.5,
                                 letterSpacing: 0.6,
                                 fontWeight: FontWeight.w600,
-                                color: espresso,
+                                color: Theme.of(context).colorScheme.primary,
                               ),
                             ),
                           ],
@@ -406,25 +411,25 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(left: 4),
                 child: Text(
                   'Popular Items',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: espresso,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ),
               TextButton(
                 onPressed: () => _goMenu(),
-                child: const Text(
+                child: Text(
                   'See All',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: espresso,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ),
@@ -464,7 +469,7 @@ class _HomeScreenState extends State<HomeScreen> {
       borderRadius: BorderRadius.circular(14),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
@@ -496,7 +501,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.9),
+                          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
@@ -526,14 +531,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           onTap: () => Favorites.I.toggle(p),
                           child: Container(
                             padding: const EdgeInsets.all(5),
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
                               fav ? Icons.favorite : Icons.favorite_border,
                               size: 16,
-                              color: fav ? Colors.red : espresso,
+                              color: fav ? Colors.red : Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         );
@@ -556,10 +561,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: Text(
                     peso(dbl(p['base_price'])),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
-                      color: espresso,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                 ),

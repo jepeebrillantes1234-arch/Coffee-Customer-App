@@ -149,14 +149,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Delivery Address',
                     style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     'Choose a saved address or tap the map to set your location.',
-                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                   if (_saved.isNotEmpty) ...[
                     const SizedBox(height: 10),
@@ -227,9 +227,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                         color: Colors.white,
                                         width: 3,
                                       ),
-                                      boxShadow: const [
+                                      boxShadow: [
                                         BoxShadow(
-                                          color: Colors.black38,
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                                           blurRadius: 6,
                                         ),
                                       ],
@@ -413,9 +413,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Widget _sectionCard({required Widget child}) => Container(
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: const Color(0xFFECE7E2)),
+      border: Border.all(color: Theme.of(context).dividerColor),
     ),
     child: child,
   );
@@ -440,7 +440,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         : dbl(quote['subtotal']);
     final displayedTotal = quote == null ? null : dbl(quote['total']);
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text(
           'Checkout',
@@ -490,15 +490,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         horizontal: 13,
                         vertical: 4,
                       ),
-                      leading: const Icon(
+                      leading: Icon(
                         Icons.location_on_outlined,
-                        color: espresso,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                       title: Text(
                         address.isEmpty ? 'Choose a delivery address' : address,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -507,9 +507,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         _pin == null
                             ? 'Required for delivery'
                             : '${_pin!.latitude.toStringAsFixed(5)}, ${_pin!.longitude.toStringAsFixed(5)}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Colors.black54,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                       trailing: _locating
@@ -534,9 +534,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               ? 'cod'
                               : 'cash',
                         ),
-                        leading: const Icon(
+                        leading: Icon(
                           Icons.payments_outlined,
-                          color: espresso,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                         title: Text(
                           _type == 'delivery'
@@ -558,7 +558,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               ? Icons.radio_button_unchecked
                               : Icons.radio_button_checked,
                           color: _paymentMethod == 'qrph'
-                              ? Colors.black38
+                              ? Theme.of(context).colorScheme.onSurfaceVariant
                               : espresso,
                           size: 19,
                         ),
@@ -570,13 +570,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         onTap: AppState.online
                             ? () => setState(() => _paymentMethod = 'qrph')
                             : null,
-                        leading: const Icon(
+                        leading: Icon(
                           Icons.credit_card_outlined,
-                          color: Colors.black45,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
-                        title: const Text(
+                        title: Text(
                           'QRPh',
-                          style: TextStyle(fontSize: 13, color: Colors.black54),
+                          style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
                         subtitle: Text(
                           AppState.online
@@ -585,20 +585,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           style: const TextStyle(fontSize: 11),
                         ),
                         trailing: AppState.online && _paymentMethod == 'qrph'
-                            ? const Icon(
+                            ? Icon(
                                 Icons.radio_button_checked,
-                                color: espresso,
+                                color: Theme.of(context).colorScheme.primary,
                                 size: 19,
                               )
                             : AppState.online
-                            ? const Icon(
+                            ? Icon(
                                 Icons.radio_button_unchecked,
-                                color: Colors.black38,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 size: 19,
                               )
-                            : const Icon(
+                            : Icon(
                                 Icons.lock_outline,
-                                color: Colors.black38,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 size: 18,
                               ),
                       ),
@@ -628,7 +628,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               style: TextStyle(
                                 fontSize: 12,
                                 color: _error == null
-                                    ? Colors.black54
+                                    ? Theme.of(context).colorScheme.onSurfaceVariant
                                     : Colors.red,
                               ),
                             ),
@@ -745,16 +745,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Color(0xFFECE7E2))),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
               ),
               child: SizedBox(
                 height: 48,
                 child: FilledButton(
                   onPressed: _canPlace ? _place : null,
                   style: FilledButton.styleFrom(
-                    backgroundColor: espresso,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),

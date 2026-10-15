@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -6,14 +7,13 @@ import '../core/api.dart';
 import '../core/config.dart';
 import '../core/role_home.dart';
 import '../core/theme.dart';
+import 'register_screen.dart';
 
 final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 Future<void>? _googleSignInInitialization;
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key, this.initialRegister = false});
-
-  final bool initialRegister;
+  const AuthScreen({super.key});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -21,14 +21,10 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _name = TextEditingController();
   final _username = TextEditingController();
   final _email = TextEditingController();
-  final _phone = TextEditingController();
   final _password = TextEditingController();
-  final _confirmPassword = TextEditingController();
 
-  bool _register = false;
   bool _hide = true;
   bool _remember = true;
   bool _busy = false;
@@ -37,7 +33,6 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   void initState() {
     super.initState();
-    _register = widget.initialRegister;
     SharedPreferences.getInstance().then((p) {
       if (mounted) setState(() => _remember = p.getBool('remember_me') ?? true);
     });
@@ -45,12 +40,9 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   void dispose() {
-    _name.dispose();
     _username.dispose();
     _email.dispose();
-    _phone.dispose();
     _password.dispose();
-    _confirmPassword.dispose();
     super.dispose();
   }
 
@@ -61,18 +53,7 @@ class _AuthScreenState extends State<AuthScreen> {
       _error = null;
     });
     try {
-      if (_register) {
-        await Api.I.register(
-          _name.text.trim(),
-          _username.text.trim(),
-          _email.text.trim(),
-          _phone.text.trim(),
-          _password.text,
-          _confirmPassword.text,
-        );
-      } else {
-        await Api.I.login(_username.text.trim(), _password.text);
-      }
+      await Api.I.login(_username.text.trim(), _password.text);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('remember_me', _remember);
       if (!mounted) return;
@@ -189,45 +170,31 @@ class _AuthScreenState extends State<AuthScreen> {
         serverClientId: AppConfig.googleServerClientId,
       );
       await _googleSignInInitialization;
-      // Clear any cached Google account/token before starting a new flow.
-      // This also lets the user choose a different Google account and avoids
-      // sending an expired cached ID token to the backend.
+      // GoogleSignIn v7 uses initialize() + authenticate(). The Google token
+      // is exchanged with Firebase first; only the Firebase ID token goes to
+      // Laravel, which verifies it with Firebase Admin.
       await _googleSignIn.signOut();
       final account = await _googleSignIn.authenticate();
-      final idToken = account.authentication.idToken;
-      if (idToken == null || idToken.isEmpty) {
-        throw ApiException('Google did not return a valid sign-in token.');
+      final googleIdToken = account.authentication.idToken;
+      if (googleIdToken == null || googleIdToken.isEmpty) {
+        throw ApiException('Google did not return a sign-in token.');
       }
-      try {
-        await Api.I.loginWithGoogle(idToken);
-      } on ApiException catch (e) {
-        if (!e.message.toLowerCase().contains('google id token expired')) {
-          rethrow;
-        }
 
-        // Google can occasionally return a cached, expired credential. Revoke
-        // that credential once, then ask Google for a fresh sign-in result.
-        await _googleSignIn.disconnect();
-        final retryAccount = await _googleSignIn.authenticate();
-        final retryToken = retryAccount.authentication.idToken;
-        if (retryToken == null || retryToken.isEmpty) {
-          throw ApiException(
-            'Google did not return a fresh sign-in token. Please try again.',
-          );
-        }
-        try {
-          await Api.I.loginWithGoogle(retryToken);
-        } on ApiException catch (retryError) {
-          if (retryError.message.toLowerCase().contains(
-            'google id token expired',
-          )) {
-            throw ApiException(
-              'Google returned an expired sign-in token twice. Update Google Play services and the Google app, restart your phone, then try again.',
-            );
-          }
-          rethrow;
-        }
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleIdToken,
+      );
+      final firebaseCredential = await FirebaseAuth.instance
+          .signInWithCredential(credential);
+      final firebaseUser = firebaseCredential.user;
+      if (firebaseUser == null) {
+        throw ApiException('Firebase could not authenticate this Google account.');
       }
+      final firebaseIdToken = await firebaseUser.getIdToken(true);
+      if (firebaseIdToken == null || firebaseIdToken.isEmpty) {
+        throw ApiException('Firebase did not return a valid ID token.');
+      }
+
+      await Api.I.loginWithGoogle(firebaseIdToken);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('remember_me', true);
       if (!mounted) return;
@@ -236,12 +203,35 @@ class _AuthScreenState extends State<AuthScreen> {
       );
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
-    } catch (_) {
+    } on GoogleSignInException catch (e, stackTrace) {
+      debugPrint('Google sign-in failed (${e.code.name}): ${e.description}');
+      debugPrintStack(stackTrace: stackTrace);
+      final message = switch (e.code) {
+        GoogleSignInExceptionCode.canceled => 'Google sign-in was canceled.',
+        GoogleSignInExceptionCode.clientConfigurationError =>
+          'Google sign-in configuration is incorrect. Check that the Firebase Android package name and SHA-1 match this app.',
+        GoogleSignInExceptionCode.providerConfigurationError =>
+          'Google sign-in is not configured or enabled in Firebase Authentication.',
+        _ =>
+          'Google sign-in failed (${e.code.name}): '
+          '${e.description ?? 'Please try again.'}',
+      };
+      if (mounted) setState(() => _error = message);
+    } on FirebaseAuthException catch (e, stackTrace) {
+      debugPrint('Firebase Auth failed (${e.code}): ${e.message}');
+      debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         setState(
           () => _error =
-              'Google sign-in was cancelled or could not be completed.',
+              'Firebase sign-in failed (${e.code}): '
+              '${e.message ?? 'Please try again.'}',
         );
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Unhandled Google sign-in failure: $e');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        setState(() => _error = 'Google sign-in failed: $e');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -256,26 +246,23 @@ class _AuthScreenState extends State<AuthScreen> {
   InputDecoration _dec(String hint, IconData icon, {Widget? suffix}) =>
       InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: Color(0xFF9A8F8A)),
-        prefixIcon: Icon(icon, color: espresso),
+        hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        prefixIcon: Icon(icon, color: Theme.of(context).colorScheme.primary),
         suffixIcon: suffix,
         filled: true,
-        fillColor: Colors.white,
+        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
         contentPadding: const EdgeInsets.symmetric(vertical: 18),
-        border: _border(const Color(0xFFEDE5DE)),
-        enabledBorder: _border(const Color(0xFFEDE5DE)),
-        focusedBorder: _border(espresso, 1.5),
+        border: _border(Theme.of(context).colorScheme.outlineVariant),
+        enabledBorder: _border(Theme.of(context).colorScheme.outlineVariant),
+        focusedBorder: _border(Theme.of(context).colorScheme.primary, 1.5),
         errorBorder: _border(Colors.red.shade300),
         focusedErrorBorder: _border(Colors.red.shade400, 1.5),
       );
 
-  String? _required(String? v, String msg) =>
-      (v == null || v.trim().isEmpty) ? msg : null;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFBF7F2),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -293,66 +280,53 @@ class _AuthScreenState extends State<AuthScreen> {
                         'assets/images/logo1.png',
                         height: 104,
                         cacheHeight: 320,
-                        errorBuilder: (_, e, s) => const Icon(
+                        errorBuilder: (_, e, s) => Icon(
                           Icons.local_cafe,
                           size: 72,
-                          color: espresso,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'KJM COFFEE',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 3,
-                        color: espresso,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
-                    const Text(
+                    Text(
                       'COFFEE • JOY • MOMENTS',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 11,
                         letterSpacing: 3,
-                        color: Color(0xFF8A7F7A),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(height: 30),
 
                     // ---------- TITLE ----------
                     Text(
-                      _register ? 'Create Account' : 'Welcome Back!',
-                      style: const TextStyle(
+                      'Welcome Back!',
+                      style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF1E1412),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _register
-                          ? 'Sign up to start ordering your coffee.'
-                          : 'Log in to continue your coffee journey.',
-                      style: const TextStyle(color: Color(0xFF6F625E)),
+                      'Log in to continue your coffee journey.',
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 22),
 
                     // ---------- FIELDS ----------
-                    if (_register) ...[
-                      TextFormField(
-                        controller: _name,
-                        textInputAction: TextInputAction.next,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: _dec('Full name', Icons.person_outline),
-                        validator: (v) =>
-                            _required(v, 'Please enter your name.'),
-                      ),
-                      const SizedBox(height: 14),
-                    ],
                     TextFormField(
                       controller: _username,
                       textInputAction: TextInputAction.next,
@@ -363,54 +337,24 @@ class _AuthScreenState extends State<AuthScreen> {
                         if (value.isEmpty) {
                           return 'Please enter your username.';
                         }
-                        if (_register && value.length < 3) {
-                          return 'Username must be at least 3 characters.';
-                        }
-                        if (_register &&
-                            !RegExp(r'^[A-Za-z0-9_]+$').hasMatch(value)) {
-                          return 'Use only letters, numbers, and underscores.';
-                        }
                         return null;
                       },
                     ),
                     const SizedBox(height: 14),
-                    if (_register) ...[
-                      TextFormField(
-                        controller: _email,
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        decoration: _dec('Email', Icons.mail_outline),
-                        validator: (v) =>
-                            _required(v, 'Please enter your email.'),
-                      ),
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _phone,
-                        keyboardType: TextInputType.phone,
-                        textInputAction: TextInputAction.next,
-                        decoration: _dec(
-                          'Phone (optional)',
-                          Icons.phone_outlined,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                    ],
                     TextFormField(
                       controller: _password,
                       obscureText: _hide,
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _busy ? null : _submit(),
                       decoration: _dec(
-                        _register
-                            ? 'Password (at least 8 characters)'
-                            : 'Password',
+                        'Password',
                         Icons.lock_outline,
                         suffix: IconButton(
                           icon: Icon(
                             _hide
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
-                            color: espresso,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                           onPressed: () => setState(() => _hide = !_hide),
                         ),
@@ -418,34 +362,12 @@ class _AuthScreenState extends State<AuthScreen> {
                       validator: (v) {
                         if (v == null || v.isEmpty)
                           return 'Please enter your password.';
-                        if (_register && v.length < 8)
-                          return 'Must be at least 8 characters.';
                         return null;
                       },
                     ),
-                    if (_register) ...[
-                      const SizedBox(height: 14),
-                      TextFormField(
-                        controller: _confirmPassword,
-                        obscureText: _hide,
-                        textInputAction: TextInputAction.done,
-                        onFieldSubmitted: (_) => _busy ? null : _submit(),
-                        decoration: _dec('Confirm password', Icons.lock_outline),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) {
-                            return 'Please confirm your password.';
-                          }
-                          if (v != _password.text) {
-                            return 'Passwords do not match.';
-                          }
-                          return null;
-                        },
-                      ),
-                    ],
 
                     // ---------- REMEMBER ME / FORGOT ----------
-                    if (!_register)
-                      Padding(
+                    Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: Row(
                           children: [
@@ -454,18 +376,18 @@ class _AuthScreenState extends State<AuthScreen> {
                               height: 28,
                               child: Checkbox(
                                 value: _remember,
-                                activeColor: espresso,
+                                activeColor: Theme.of(context).colorScheme.primary,
                                 visualDensity: VisualDensity.compact,
                                 onChanged: (v) =>
                                     setState(() => _remember = v ?? true),
                               ),
                             ),
                             const SizedBox(width: 6),
-                            const Text(
+                            Text(
                               'Remember me',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Color(0xFF4A3F3B),
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                             ),
                             const Spacer(),
@@ -476,11 +398,11 @@ class _AuthScreenState extends State<AuthScreen> {
                                 minimumSize: const Size(0, 32),
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
-                              child: const Text(
+                              child: Text(
                                 'Forgot password?',
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: Color(0xFF4A3F3B),
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
                               ),
                             ),
@@ -513,7 +435,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               ),
                             )
                           : Text(
-                              _register ? 'Sign Up' : 'Log In',
+                              'Log In',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -522,16 +444,15 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
 
                     // ---------- GOOGLE SIGN-IN ----------
-                    if (!_register) ...[
-                      const SizedBox(height: 20),
+                    const SizedBox(height: 20),
                       Row(
-                        children: const [
+                        children: [
                           Expanded(child: Divider()),
                           Padding(
                             padding: EdgeInsets.symmetric(horizontal: 12),
                             child: Text(
                               'or',
-                              style: TextStyle(color: Colors.black54),
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                             ),
                           ),
                           Expanded(child: Divider()),
@@ -555,30 +476,29 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                         onTap: _busy ? () {} : _signInWithGoogle,
                       ),
-                    ],
 
-                    // ---------- SIGN UP / LOG IN ----------
+                    // ---------- OPEN REGISTRATION ----------
                     const SizedBox(height: 22),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          _register
-                              ? 'Already have an account?'
-                              : "Don't have an account?",
-                          style: const TextStyle(color: Color(0xFF4A3F3B)),
+                          "Don't have an account?",
+                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
                         TextButton(
-                          onPressed: () => setState(() {
-                            _register = !_register;
-                            _error = null;
-                            _formKey.currentState?.reset();
-                          }),
+                          onPressed: _busy
+                              ? null
+                              : () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const RegisterScreen(),
+                                    ),
+                                  ),
                           child: Text(
-                            _register ? 'Log in' : 'Sign up',
-                            style: const TextStyle(
+                            'Sign up',
+                            style: TextStyle(
                               fontWeight: FontWeight.w800,
-                              color: espresso,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ),
@@ -603,8 +523,8 @@ class _AuthScreenState extends State<AuthScreen> {
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
         minimumSize: const Size.fromHeight(54),
-        backgroundColor: Colors.white,
-        side: const BorderSide(color: Color(0xFFEDE5DE)),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       child: Row(
@@ -614,8 +534,8 @@ class _AuthScreenState extends State<AuthScreen> {
           const SizedBox(width: 12),
           Text(
             label,
-            style: const TextStyle(
-              color: Color(0xFF2B1A17),
+          style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w500,
             ),
           ),

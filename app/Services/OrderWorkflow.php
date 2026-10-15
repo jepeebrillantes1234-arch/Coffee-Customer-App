@@ -5,7 +5,9 @@ use App\Models\Delivery;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
+use App\Support\Geo;
 use App\Support\Notifier;
+use App\Support\Settings;
 use Illuminate\Support\Facades\DB;
 
 class OrderWorkflow
@@ -69,8 +71,30 @@ class OrderWorkflow
     {
         if ($o->order_type!=='delivery' || $o->status!=='ready') throw new \DomainException('Ready na delivery order lang ang maaaring i-assign.');
         $rider=\App\Models\User::where('role','rider')->where('status','active')->whereHas('riderProfile',fn($q)=>$q->where('is_approved',true))->findOrFail($riderId);
-        DB::transaction(function()use($o,$rider){Delivery::updateOrCreate(['order_id'=>$o->id],['rider_id'=>$rider->id,'status'=>'assigned','assigned_at'=>now()]);$this->set($o,'rider_assigned');});
+        DB::transaction(function () use ($o, $rider) {
+            $delivery = Delivery::firstOrNew(['order_id' => $o->id]);
+            $delivery->rider_id = $rider->id;
+            $delivery->status = 'assigned';
+            $delivery->assigned_at = now();
+            if ($delivery->distance_km === null) {
+                $delivery->distance_km = $this->estimatedDistance($o);
+            }
+            $delivery->save();
+            $this->set($o, 'rider_assigned');
+        });
         return null;
+    }
+
+    private function estimatedDistance(Order $order): ?float
+    {
+        $shopLat = Settings::get('shop_lat');
+        $shopLng = Settings::get('shop_lng');
+        if (!is_numeric($shopLat) || !is_numeric($shopLng)
+            || !is_numeric($order->delivery_lat) || !is_numeric($order->delivery_lng)) {
+            return null;
+        }
+
+        return Geo::km((float) $shopLat, (float) $shopLng, (float) $order->delivery_lat, (float) $order->delivery_lng);
     }
     private function change(Order $o,string $from,string $to)
     {

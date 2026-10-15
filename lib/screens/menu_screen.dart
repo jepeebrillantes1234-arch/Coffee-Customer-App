@@ -90,16 +90,16 @@ class _MenuScreenState extends State<MenuScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: espresso,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
         centerTitle: true,
         automaticallyImplyLeading: false,
-        title: const Text(
+        title: Text(
           'Menu',
           style: TextStyle(
-            color: Colors.black,
+            color: Theme.of(context).colorScheme.onSurface,
             fontSize: 17,
             fontWeight: FontWeight.w700,
           ),
@@ -107,10 +107,10 @@ class _MenuScreenState extends State<MenuScreen> {
         leading: IconButton(
           tooltip: 'Back to home',
           onPressed: () => rootTab.value = 0,
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_back_ios_new_rounded,
             size: 20,
-            color: Color(0xFF242424),
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
       ),
@@ -136,12 +136,12 @@ class _MenuScreenState extends State<MenuScreen> {
                       labelStyle: TextStyle(
                         color: _cat == category['id']
                             ? Colors.white
-                            : const Color(0xFF222222),
+                            : Theme.of(context).colorScheme.onSurface,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
-                      selectedColor: espresso,
-                      backgroundColor: const Color(0xFFF6F5F3),
+                      selectedColor: Theme.of(context).colorScheme.primary,
+                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                       shape: const StadiumBorder(),
                       side: BorderSide.none,
                       padding: const EdgeInsets.symmetric(
@@ -173,10 +173,10 @@ class _MenuScreenState extends State<MenuScreen> {
                         : ListView.separated(
                             padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
                             itemCount: _products.length,
-                            separatorBuilder: (_, _) => const Divider(
+                            separatorBuilder: (_, _) => Divider(
                               height: 1,
                               indent: 84,
-                              color: Color(0xFFF0EFED),
+                              color: Theme.of(context).dividerColor,
                             ),
                             itemBuilder: (_, index) =>
                                 _menuRow(_products[index]),
@@ -218,9 +218,9 @@ class _MenuScreenState extends State<MenuScreen> {
                     '${product['name']}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF202020),
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -230,17 +230,17 @@ class _MenuScreenState extends State<MenuScreen> {
                       description,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: Color(0xFF888888),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   const SizedBox(height: 5),
                   Text(
                     peso(dbl(product['base_price'])),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: Colors.black,
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -274,9 +274,9 @@ Widget productCard(BuildContext context, Map<String, dynamic> p) {
     child: Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFCF6),
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFEDE5DA)),
+        border: Border.all(color: Theme.of(context).dividerColor),
         boxShadow: const [
           BoxShadow(
             color: Color(0x0D392517),
@@ -301,7 +301,7 @@ Widget productCard(BuildContext context, Map<String, dynamic> p) {
                     builder: (_, _) {
                       final fav = Favorites.I.has(p['id'] as int);
                       return Material(
-                        color: Colors.white.withValues(alpha: 0.94),
+                        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
                         shape: const CircleBorder(),
                         child: InkWell(
                           customBorder: const CircleBorder(),
@@ -314,7 +314,7 @@ Widget productCard(BuildContext context, Map<String, dynamic> p) {
                                   ? Icons.favorite_rounded
                                   : Icons.favorite_border_rounded,
                               size: 23,
-                              color: fav ? const Color(0xFFE76565) : espresso,
+                              color: fav ? const Color(0xFFE76565) : Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ),
@@ -334,8 +334,8 @@ Widget productCard(BuildContext context, Map<String, dynamic> p) {
                   '${p['name']}',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: espresso,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontFamily: 'serif',
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
@@ -345,16 +345,16 @@ Widget productCard(BuildContext context, Map<String, dynamic> p) {
                 const SizedBox(height: 7),
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.eco_rounded,
                       size: 14,
-                      color: Color(0xFF87927A),
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Container(
                         height: 1.5,
-                        color: const Color(0xFFB9C0AE),
+                        color: Theme.of(context).dividerColor,
                       ),
                     ),
                   ],
@@ -362,8 +362,8 @@ Widget productCard(BuildContext context, Map<String, dynamic> p) {
                 const SizedBox(height: 5),
                 Text(
                   peso(dbl(p['base_price'])),
-                  style: const TextStyle(
-                    color: Color(0xFF566442),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
                   ),

@@ -12,6 +12,16 @@ class PosController extends Controller
 {
     public function index()
     {
+        return view('staff.pos.index', ['catalog' => $this->catalogData()]);
+    }
+
+    public function catalog()
+    {
+        return response()->json($this->catalogData());
+    }
+
+    private function catalogData(): array
+    {
         $categories = Category::where('is_active', true)->orderBy('sort_order')->get(['id', 'name']);
 
         $products = \App\Models\Product::with(['optionGroups.options' => fn ($q) => $q->where('is_available', true)])
@@ -31,7 +41,7 @@ class PosController extends Controller
                 ])->values(),
             ])->values();
 
-        return view('staff.pos.index', ['catalog' => ['categories' => $categories, 'products' => $products]]);
+        return ['categories' => $categories, 'products' => $products];
     }
 
     public function store(Request $request, CheckoutService $svc)

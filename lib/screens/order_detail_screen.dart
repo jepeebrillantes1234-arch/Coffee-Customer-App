@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
+import '../core/realtime.dart';
 import '../core/theme.dart';
 import '../core/util.dart';
 import 'payment_screen.dart';
@@ -23,27 +24,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Map<String, dynamic>? _t;
   bool _loading = true;
   String? _error;
-  Timer? _poll;
+  StreamSubscription<Map<String, dynamic>>? _liveSubscription;
   int _rating = 5;
   final _comment = TextEditingController();
   bool _busy = false;
   bool _showDetails = false;
 
-  static const _final = ['completed', 'rejected', 'cancelled'];
-
   @override
   void initState() {
     super.initState();
     _load();
-    _poll = Timer.periodic(const Duration(seconds: 5), (_) {
-      final s = _o?['status'];
-      if (s == null || !_final.contains(s)) _load(silent: true);
+    Realtime.I.connect();
+    _liveSubscription = Realtime.I.updates.listen((event) {
+      if (event['kind'] == 'order' || event['kind'] == 'delivery' || event['kind'] == 'payment') _load(silent: true);
     });
   }
 
   @override
   void dispose() {
-    _poll?.cancel();
+    _liveSubscription?.cancel();
     _comment.dispose();
     super.dispose();
   }
@@ -141,10 +140,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Widget build(BuildContext context) {
     final o = _o;
     return Scaffold(
-      backgroundColor: espresso,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: espresso,
-        foregroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
         title: const Text('Track Order'),
       ),
       body: _loading
@@ -207,7 +206,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             Expanded(
               child: Text(
                 '${o['order_number'] ?? 'Order'}',
-                style: const TextStyle(fontSize: 13, color: Colors.black54),
+                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
             ),
             IconButton(
@@ -219,7 +218,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ),
         Card(
           elevation: 1,
-          color: const Color(0xFFFFFCF8),
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
@@ -233,15 +232,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     Container(
                       width: 52,
                       height: 52,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFF1E6DA),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         isDelivery
                             ? Icons.delivery_dining_rounded
                             : Icons.storefront_rounded,
-                        color: espresso,
+                        color: Theme.of(context).colorScheme.primary,
                         size: 29,
                       ),
                     ),
@@ -264,7 +263,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           const SizedBox(height: 4),
                           Text(
                             _statusText(status, type),
-                            style: const TextStyle(color: Colors.black54),
+                            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                           ),
                         ],
                       ),
@@ -272,9 +271,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     if (eta != null && !isDelivered)
                       Text(
                         'Arriving in $eta min',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          color: espresso,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       ),
                   ],
@@ -369,11 +368,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                     vertical: 7,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
+                                    color: Theme.of(context).colorScheme.surfaceContainerLow,
                                     borderRadius: BorderRadius.circular(20),
-                                    boxShadow: const [
+                                    boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black26,
+                                        color: Theme.of(context).colorScheme.shadow,
                                         blurRadius: 6,
                                       ),
                                     ],
@@ -406,7 +405,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 Icons.location_on_outlined,
                 size: 17,
                 color: riderPoint == null
-                    ? Colors.black45
+                    ? Theme.of(context).colorScheme.onSurfaceVariant
                     : Colors.red.shade700,
               ),
               const SizedBox(width: 5),
@@ -415,7 +414,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   riderPoint == null
                       ? 'Location will appear here once the rider starts sharing their location.'
                       : 'Rider location updates every few seconds.',
-                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
               ),
             ],
@@ -432,10 +431,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 children: [
                   CircleAvatar(
                     radius: 25,
-                    backgroundColor: const Color(0xFFF1E6DA),
+                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                     child: Icon(
                       Icons.delivery_dining_rounded,
-                      color: espresso,
+                      color: Theme.of(context).colorScheme.primary,
                       size: 28,
                     ),
                   ),
@@ -453,17 +452,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           rider == null
                               ? 'Rider will be assigned once the order is ready.'
                               : 'Delivery rider',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: Colors.black54,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                         if (rider?['plate_number'] != null)
                           Text(
                             '${rider!['plate_number']}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
-                              color: Colors.black54,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
                       ],
@@ -492,7 +491,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             onPressed: () => setState(() => _showDetails = !_showDetails),
             style: OutlinedButton.styleFrom(
               foregroundColor: espresso,
-              side: const BorderSide(color: espresso),
+              side: BorderSide(color: Theme.of(context).colorScheme.primary),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
@@ -517,7 +516,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             child: ExpansionTile(
               tilePadding: const EdgeInsets.symmetric(horizontal: 16),
               childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              leading: const Icon(Icons.receipt_long_rounded, color: espresso),
+              leading: Icon(Icons.receipt_long_rounded, color: Theme.of(context).colorScheme.primary),
               title: const Text(
                 'Order details',
                 style: TextStyle(fontWeight: FontWeight.w700),
@@ -555,9 +554,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   (item['options'] as List).isNotEmpty)
                                 Text(
                                   (item['options'] as List).join(', '),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.black54,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                             ],
@@ -612,9 +611,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           ),
                           Text(
                             timeText(entry['at']),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
-                              color: Colors.black54,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -726,7 +725,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         children: [
           CircleAvatar(
             radius: 12,
-            backgroundColor: done ? espresso : const Color(0xFFE4DED8),
+            backgroundColor: done ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
             child: Icon(
               step < current
                   ? Icons.check
@@ -736,7 +735,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         ? Icons.delivery_dining_rounded
                         : Icons.home_rounded),
               size: 14,
-              color: done ? Colors.white : Colors.black45,
+              color: done ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 5),
@@ -745,7 +744,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 10,
-              color: done ? espresso : Colors.black45,
+              color: done ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
               fontWeight: done ? FontWeight.w600 : FontWeight.normal,
             ),
           ),
@@ -756,28 +755,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _progressLine(bool active) => Container(
     height: 2,
-    color: active ? espresso : const Color(0xFFE4DED8),
+    color: active ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
     margin: const EdgeInsets.only(bottom: 18),
   );
 
   Widget _mapPin(IconData icon, Color color) => Container(
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
       shape: BoxShape.circle,
       border: Border.all(color: color, width: 2),
-      boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 5)],
+      boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.shadow, blurRadius: 5)],
     ),
     child: Icon(icon, color: color, size: 25),
   );
 
   Widget _mapPlaceholder(String address) => Container(
-    color: const Color(0xFFECE7E1),
+    color: Theme.of(context).dividerColor,
     alignment: Alignment.center,
     padding: const EdgeInsets.all(24),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.location_searching_rounded, size: 44, color: espresso),
+        Icon(Icons.location_searching_rounded, size: 44, color: Theme.of(context).colorScheme.primary),
         const SizedBox(height: 10),
         const Text(
           'No map location available for this address.',
@@ -789,7 +788,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           Text(
             address,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.black54),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ],
       ],
@@ -801,7 +800,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         onPressed: onPressed,
         icon: Icon(icon, size: 19),
         style: IconButton.styleFrom(
-          backgroundColor: const Color(0xFFF1E6DA),
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
           foregroundColor: espresso,
         ),
       );
@@ -811,7 +810,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 19, color: espresso),
+        Icon(icon, size: 19, color: Theme.of(context).colorScheme.primary),
         const SizedBox(width: 9),
         Expanded(
           child: Column(
@@ -819,7 +818,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             children: [
               Text(
                 label,
-                style: const TextStyle(fontSize: 11, color: Colors.black54),
+                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 2),
               Text(value),

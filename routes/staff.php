@@ -14,9 +14,12 @@ Route::middleware(['auth','role:staff,admin'])->prefix('staff')->name('staff.')-
     Route::post('/orders/{order}/assign-available',[OrderController::class,'assignAvailable'])->name('orders.assign-available');
     Route::post('/deliveries/{delivery}/remit',[OrderController::class,'remit'])->name('deliveries.remit');
     Route::get('/pos',[PosController::class,'index'])->name('pos');
+    Route::get('/pos/catalog',[PosController::class,'catalog'])->name('pos.catalog');
     Route::post('/pos',[PosController::class,'store'])->name('pos.store');
     Route::get('/pos/{order}/receipt',[PosController::class,'receipt'])->name('pos.receipt');
     Route::get('/menu',[ProductController::class,'index'])->name('menu');
+    Route::get('/menu/partial',[ProductController::class,'partial'])->name('menu.partial');
     Route::post('/menu/{product}/toggle',[ProductController::class,'toggle'])->name('menu.toggle');
     Route::get('/transactions',[TransactionController::class,'index'])->name('transactions');
+    Route::get('/transactions/partial',[TransactionController::class,'partial'])->name('transactions.partial');
 });

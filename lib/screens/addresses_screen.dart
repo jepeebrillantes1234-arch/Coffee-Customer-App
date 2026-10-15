@@ -40,6 +40,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(title: const Text('Saved Addresses')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

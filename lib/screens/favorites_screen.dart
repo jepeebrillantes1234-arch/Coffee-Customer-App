@@ -20,7 +20,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const page = Color(0xFFFBF8F3);
+    final page = Theme.of(context).scaffoldBackgroundColor;
     return Scaffold(
       backgroundColor: page,
       appBar: AppBar(
@@ -28,10 +28,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         leading: IconButton(
           tooltip: 'Back',
           onPressed: () => Navigator.of(context).maybePop(),
-          icon: const Icon(Icons.arrow_back_rounded, color: espresso, size: 28),
+          icon: Icon(Icons.arrow_back_rounded, color: Theme.of(context).colorScheme.primary, size: 28),
         ),
         titleSpacing: 0,
-        title: const Row(
+        title: Row(
           children: [
             Icon(Icons.favorite_rounded, color: Color(0xFFE76565), size: 27),
             SizedBox(width: 8),
@@ -43,14 +43,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   Text(
                     'Favorites',
                     style: TextStyle(
-                      color: espresso,
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   Text(
                     'Your cravings, saved',
-                    style: TextStyle(color: Colors.black54, fontSize: 12),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                   ),
                 ],
               ),

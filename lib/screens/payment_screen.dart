@@ -198,7 +198,7 @@ class _PaymentScreenState extends State<PaymentScreen>
             Text(
               '${_order['order_number']}',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.black54),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 18),
             Card(
@@ -221,7 +221,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                           ? 'The payment window has expired'
                           : 'Payment expires in $_timeText',
                       style: TextStyle(
-                        color: expired ? Colors.red : Colors.black54,
+                        color: expired ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -229,9 +229,9 @@ class _PaymentScreenState extends State<PaymentScreen>
               ),
             ),
             const SizedBox(height: 14),
-            const Text(
+            Text(
               '1. Open the secure QRPh checkout.\n2. Scan the QR code with a QRPh-enabled wallet or banking app.\n3. Return here. We will verify your payment automatically.\n\nThe shop will receive your order after payment is confirmed.',
-              style: TextStyle(height: 1.5, color: Colors.black54),
+              style: TextStyle(height: 1.5, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 18),
             FilledButton(

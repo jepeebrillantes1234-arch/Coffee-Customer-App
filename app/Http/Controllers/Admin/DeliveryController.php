@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Delivery;
 use App\Models\Order;
+use App\Support\Geo;
+use App\Support\Settings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -16,6 +18,23 @@ class DeliveryController extends Controller
             ->where('order_type','delivery')
             ->when($filter==='active',fn($q)=>$q->whereIn('status',['ready','rider_assigned','picked_up','on_the_way']))
             ->latest()->paginate(15)->withQueryString();
+
+        $shopLat = Settings::get('shop_lat');
+        $shopLng = Settings::get('shop_lng');
+        $orders->getCollection()->each(function (Order $order) use ($shopLat, $shopLng) {
+            $delivery = $order->delivery;
+            if (!$delivery || $delivery->distance_km !== null
+                || !is_numeric($shopLat) || !is_numeric($shopLng)
+                || !is_numeric($order->delivery_lat) || !is_numeric($order->delivery_lng)) {
+                return;
+            }
+            $delivery->setAttribute('distance_km', Geo::km(
+                (float) $shopLat,
+                (float) $shopLng,
+                (float) $order->delivery_lat,
+                (float) $order->delivery_lng,
+            ));
+        });
         return view('admin.deliveries.index',compact('orders','filter'));
     }
 

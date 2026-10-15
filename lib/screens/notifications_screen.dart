@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
+import '../core/realtime.dart';
 import '../core/util.dart';
 import 'order_detail_screen.dart';
 
@@ -16,14 +19,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _loading = true;
   bool _hadUnread = false;
   String? _error;
-
-  static const _coffee = Color(0xFF512D1C);
-  static const _page = Color(0xFFFBF8F3);
+  StreamSubscription<Map<String, dynamic>>? _liveSubscription;
 
   @override
   void initState() {
     super.initState();
     _load();
+    Realtime.I.connect();
+    _liveSubscription = Realtime.I.updates.listen((event) {
+      if (event['kind'] == 'notification') _load();
+    });
+  }
+
+
+  @override
+  void dispose() {
+    _liveSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -128,7 +140,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return '${reference[0].toUpperCase()}${reference.substring(1)} $phrase.';
   }
 
-  Color _statusColor(String status) => switch (status) {
+  Color _statusColor(String status, BuildContext context) => switch (status) {
     'pending' || 'confirmed' => const Color(0xFF39845A),
     'completed' || 'ready' => const Color(0xFFD98A18),
     'delivered' ||
@@ -138,7 +150,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     'picked_up' || 'on_the_way' => const Color(0xFF287CC1),
     'preparing' => const Color(0xFF119A94),
     'rider_assigned' => const Color(0xFF6A49A4),
-    _ => _coffee,
+    _ => Theme.of(context).colorScheme.primary,
   };
 
   IconData _icon(String status, Map<String, dynamic> notification) =>
@@ -160,23 +172,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final page = Theme.of(context).scaffoldBackgroundColor;
     return Scaffold(
-      backgroundColor: _page,
+      backgroundColor: page,
       appBar: AppBar(
-        backgroundColor: _page,
+        backgroundColor: page,
         leading: IconButton(
           tooltip: 'Back',
           onPressed: () => Navigator.of(context).maybePop(),
-          icon: const Icon(Icons.arrow_back_rounded, color: _coffee, size: 28),
+          icon: Icon(Icons.arrow_back_rounded, color: Theme.of(context).colorScheme.primary, size: 28),
         ),
         titleSpacing: 0,
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Notifications',
               style: TextStyle(
-                color: _coffee,
+                color: Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.w800,
                 fontSize: 22,
               ),
@@ -185,7 +198,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               'Stay updated with your orders and activities',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.black54, fontSize: 12),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
             ),
           ],
         ),
@@ -196,24 +209,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ? Badge(
                     smallSize: 10,
                     backgroundColor: const Color(0xFFE24C54),
-                    child: const Icon(
+                    child: Icon(
                       Icons.notifications_none_rounded,
-                      color: _coffee,
+                      color: Theme.of(context).colorScheme.primary,
                       size: 27,
                     ),
                   )
-                : const Icon(
+                : Icon(
                     Icons.notifications_none_rounded,
-                    color: _coffee,
+                    color: Theme.of(context).colorScheme.primary,
                     size: 27,
                   ),
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _coffee))
+          ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              color: _coffee,
+              color: Theme.of(context).colorScheme.primary,
               onRefresh: _load,
               child: _items.isEmpty
                   ? ListView(
@@ -230,7 +243,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               const SizedBox(height: 12),
                               Text(
                                 _error ?? 'No notifications yet.',
-                                style: const TextStyle(color: Colors.black54),
+                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                               ),
                             ],
                           ),
@@ -242,19 +255,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       itemCount: _items.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 11),
                       itemBuilder: (context, index) =>
-                          _notificationCard(_items[index]),
+                          _notificationCard(context, _items[index]),
                     ),
             ),
     );
   }
 
-  Widget _notificationCard(Map<String, dynamic> notification) {
+  Widget _notificationCard(BuildContext context, Map<String, dynamic> notification) {
     final status = _status(notification);
-    final color = _statusColor(status);
+    final color = _statusColor(status, context);
     final data = notification['data'];
     final orderId = data is Map ? (data['order_id'] as num?)?.toInt() : null;
     return Material(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(19),
       child: InkWell(
         borderRadius: BorderRadius.circular(19),
@@ -269,7 +282,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(19),
-            border: Border.all(color: const Color(0xFFF0ECE7)),
+            border: Border.all(color: Theme.of(context).dividerColor),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x0B382416),
@@ -302,7 +315,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       _title(notification),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
@@ -312,18 +325,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       _message(notification),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.black54,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 12,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.access_time_rounded,
                           size: 14,
-                          color: Colors.black45,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                         const SizedBox(width: 4),
                         Expanded(
@@ -331,8 +344,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             dateTimeText(notification['created_at']),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.black54,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                               fontSize: 11,
                             ),
                           ),
@@ -369,9 +382,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                     ),
                   const SizedBox(height: 5),
-                  const Icon(
+                  Icon(
                     Icons.chevron_right_rounded,
-                    color: Colors.black54,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ],
               ),

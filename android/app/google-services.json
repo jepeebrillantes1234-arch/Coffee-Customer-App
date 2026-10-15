@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "84167127871",
+    "project_id": "kjm-coffee-shop",
+    "storage_bucket": "kjm-coffee-shop.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:84167127871:android:df2c6af1eef3dd8a41998a",
+        "android_client_info": {
+          "package_name": "com.example.KJMCoffee_shop"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "84167127871-ld2081avrn1obnu89jhppmka0s666bhm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.KJMCoffee_shop",
+            "certificate_hash": "27722af1cc9c7bc94728458fcd24539c25e17308"
+          }
+        },
+        {
+          "client_id": "84167127871-dgvl7i9cfhm026eidb9bedh6dm12drcr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFIi8aIxfsGq7sqRF8uVi1y_7bOynriqg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "84167127871-dgvl7i9cfhm026eidb9bedh6dm12drcr.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

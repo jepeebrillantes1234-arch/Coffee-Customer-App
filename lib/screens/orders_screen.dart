@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
+import '../core/realtime.dart';
 import '../core/theme.dart';
 import '../core/util.dart';
 import '../core/widgets.dart';
@@ -21,19 +22,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
   List<Map<String, dynamic>> _orders = [];
   bool _loading = true;
   String? _error;
-  Timer? _poll;
+  StreamSubscription<Map<String, dynamic>>? _liveSubscription;
   String _filter = 'All';
 
   static const _filters = ['All', 'Completed', 'Cancelled', 'Pending'];
-  static const _coffee = Color(0xFF512D1C);
-  static const _page = Color(0xFFFBF9F6);
-
   @override
   void initState() {
     super.initState();
     rootTab.addListener(_onTab);
-    _poll = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (rootTab.value == 3) _load(silent: true);
+    Realtime.I.connect();
+    _liveSubscription = Realtime.I.updates.listen((event) {
+      if (rootTab.value == 3 && ['order', 'delivery', 'payment'].contains(event['kind'])) _load(silent: true);
     });
   }
 
@@ -44,7 +43,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   void dispose() {
     rootTab.removeListener(_onTab);
-    _poll?.cancel();
+    _liveSubscription?.cancel();
     super.dispose();
   }
 
@@ -164,19 +163,19 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: _page,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         automaticallyImplyLeading: false,
         leading: IconButton(
           tooltip: 'Back to Home',
           onPressed: () => rootTab.value = 0,
-          icon: const Icon(Icons.arrow_back_rounded, color: _coffee, size: 28),
+          icon: Icon(Icons.arrow_back_rounded, color: Theme.of(context).colorScheme.primary, size: 28),
         ),
         titleSpacing: 0,
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.coffee_rounded, color: _coffee, size: 34),
+            Icon(Icons.coffee_rounded, color: Theme.of(context).colorScheme.primary, size: 34),
             SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -186,7 +185,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   Text(
                     'My Orders',
                     style: TextStyle(
-                      color: _coffee,
+                      color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                     ),
@@ -195,7 +194,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     'Track your orders and deliveries',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.black54, fontSize: 12),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                   ),
                 ],
               ),
@@ -204,9 +203,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _coffee))
+          ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              color: _coffee,
+              color: Theme.of(context).colorScheme.primary,
               onRefresh: _load,
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(14, 12, 14, 20),
@@ -228,8 +227,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             decoration: BoxDecoration(
                               color: selected
-                                  ? _coffee
-                                  : const Color(0xFFF2EEE8),
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(30),
                             ),
                             child: Row(
@@ -237,7 +236,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                 Text(
                                   filter,
                                   style: TextStyle(
-                                    color: selected ? Colors.white : _coffee,
+                                    color: selected ? Colors.white : Theme.of(context).colorScheme.onSurface,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -254,7 +253,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   decoration: BoxDecoration(
                                     color: selected
                                         ? Colors.white24
-                                        : _countColor(filter)
+                                        : _countColor(filter, context)
                                               .withValues(alpha: 0.18),
                                     shape: BoxShape.circle,
                                   ),
@@ -263,7 +262,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                     style: TextStyle(
                                       color: selected
                                           ? Colors.white
-                                          : _countColor(filter),
+                                          : _countColor(filter, context),
                                       fontSize: 11,
                                       fontWeight: FontWeight.w800,
                                     ),
@@ -283,10 +282,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       child: Center(
                         child: Column(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.cloud_off_outlined,
                               size: 42,
-                              color: Colors.black38,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                             const SizedBox(height: 10),
                             Text(_error!, textAlign: TextAlign.center),
@@ -314,7 +313,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               _orders.isEmpty
                                   ? 'You have no orders yet.'
                                   : 'No ${_filter.toLowerCase()} orders.',
-                              style: const TextStyle(color: Colors.black54),
+                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                             ),
                           ],
                         ),
@@ -331,11 +330,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Color _countColor(String filter) => switch (filter) {
+  Color _countColor(String filter, BuildContext context) => switch (filter) {
     'Completed' => const Color(0xFF2D9A5F),
     'Cancelled' => const Color(0xFFE64444),
     'Pending' => const Color(0xFF737B83),
-    _ => _coffee,
+    _ => Theme.of(context).colorScheme.primary,
   };
 
   Widget _orderCard(Map<String, dynamic> order) {
@@ -347,7 +346,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final color = statusColor(status);
     final image = _imageFor(order);
     return Material(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -357,7 +356,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: const Color(0xFFF0ECE7)),
+            border: Border.all(color: Theme.of(context).dividerColor),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x0D382416),
@@ -374,10 +373,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     ? Container(
                         width: 70,
                         height: 78,
-                        color: const Color(0xFFF3EADF),
-                        child: const Icon(
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        child: Icon(
                           Icons.coffee_rounded,
-                          color: _coffee,
+                          color: Theme.of(context).colorScheme.onSurface,
                           size: 34,
                         ),
                       )
@@ -393,19 +392,19 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       '${order['order_number'] ?? 'Order'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF18212C),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.calendar_month_outlined,
                           size: 15,
-                          color: Colors.black54,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                         const SizedBox(width: 4),
                         Expanded(
@@ -413,9 +412,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             '${order['order_type'] == 'delivery' ? 'Delivery' : 'Pickup'} · ${dateTimeText(order['created_at'])}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11.5,
-                              color: Colors.black54,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -424,10 +423,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     const SizedBox(height: 4),
                     Text(
                       peso(dbl(order['total'])),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF45515E),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                   ],
@@ -463,7 +462,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               statusText,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                      style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
@@ -477,7 +476,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   const SizedBox(height: 2),
                   TextButton.icon(
                     style: TextButton.styleFrom(
-                      foregroundColor: _coffee,
+                      foregroundColor: Theme.of(context).colorScheme.primary,
                       padding: const EdgeInsets.symmetric(horizontal: 5),
                       minimumSize: const Size(0, 28),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -496,7 +495,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     TextButton.icon(
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.red.shade600,
-                        backgroundColor: const Color(0xFFFFEEEE),
+                        backgroundColor: Theme.of(context).colorScheme.errorContainer,
                         padding: const EdgeInsets.symmetric(horizontal: 7),
                         minimumSize: const Size(0, 28),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,

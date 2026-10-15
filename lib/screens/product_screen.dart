@@ -173,21 +173,21 @@ class _ProductScreenState extends State<ProductScreen> {
   Widget build(BuildContext context) {
     final p = _p;
     return Scaffold(
-      backgroundColor: const Color(0xFFFCF9F4),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFCF9F4),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         leading: IconButton(
           tooltip: 'Back',
           onPressed: () => Navigator.of(context).maybePop(),
-          icon: const Icon(Icons.arrow_back_rounded, color: espresso, size: 28),
+          icon: Icon(Icons.arrow_back_rounded, color: Theme.of(context).colorScheme.primary, size: 28),
         ),
         titleSpacing: 0,
         title: Text(
           p == null ? 'Order' : '${p['name']}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: espresso,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface,
             fontFamily: 'serif',
             fontSize: 24,
             fontWeight: FontWeight.w700,
@@ -221,8 +221,8 @@ class _ProductScreenState extends State<ProductScreen> {
                       const SizedBox(height: 18),
                       Text(
                         '${p['name']}',
-                        style: const TextStyle(
-                          color: espresso,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
                           fontFamily: 'serif',
                           fontSize: 30,
                           fontWeight: FontWeight.w700,
@@ -231,16 +231,16 @@ class _ProductScreenState extends State<ProductScreen> {
                       const SizedBox(height: 5),
                       Text(
                         '${p['description'] ?? 'Choose your options and make it your own.'}',
-                        style: const TextStyle(
-                          color: Color(0xFF70665F),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 14,
                         ),
                       ),
                       const SizedBox(height: 14),
                       Text(
                         peso(dbl(p['base_price'])),
-                        style: const TextStyle(
-                          color: espresso,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
                         ),
@@ -252,22 +252,22 @@ class _ProductScreenState extends State<ProductScreen> {
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.surfaceContainerLow,
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: const Color(0xFFEFE5D9)),
+                          border: Border.all(color: Theme.of(context).dividerColor),
                         ),
                         child: TextField(
                           controller: _notes,
                           minLines: 2,
                           maxLines: 3,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Note (optional)',
                             hintText:
                                 'e.g. Less sugar, extra ice, no whipped cream',
                             border: InputBorder.none,
                             icon: Icon(
                               Icons.edit_note_rounded,
-                              color: espresso,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ),
@@ -279,8 +279,8 @@ class _ProductScreenState extends State<ProductScreen> {
                 SafeArea(
                   child: Container(
                     padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFCF9F4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
                       boxShadow: [
                         BoxShadow(
                           color: Color(0x12000000),
@@ -294,9 +294,9 @@ class _ProductScreenState extends State<ProductScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.surfaceContainerLow,
                             borderRadius: BorderRadius.circular(32),
-                            border: Border.all(color: const Color(0xFFE8D8C8)),
+                            border: Border.all(color: Theme.of(context).dividerColor),
                           ),
                           child: Row(
                             children: [
@@ -305,9 +305,9 @@ class _ProductScreenState extends State<ProductScreen> {
                                 onPressed: _qty > 1
                                     ? () => setState(() => _qty--)
                                     : null,
-                                icon: const Icon(
+                                icon: Icon(
                                   Icons.remove_rounded,
-                                  color: espresso,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                               ),
                               Text(
@@ -320,9 +320,9 @@ class _ProductScreenState extends State<ProductScreen> {
                               IconButton(
                                 visualDensity: VisualDensity.compact,
                                 onPressed: () => setState(() => _qty++),
-                                icon: const Icon(
+                                icon: Icon(
                                   Icons.add_rounded,
-                                  color: espresso,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                               ),
                             ],
@@ -333,7 +333,7 @@ class _ProductScreenState extends State<ProductScreen> {
                           child: FilledButton(
                             style: FilledButton.styleFrom(
                               minimumSize: const Size.fromHeight(56),
-                              backgroundColor: espresso,
+                              backgroundColor: Theme.of(context).colorScheme.primary,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(32),
                               ),
@@ -403,9 +403,9 @@ class _ProductScreenState extends State<ProductScreen> {
           ),
           const SizedBox(height: 6),
           if (items.isEmpty)
-            const Text(
+            Text(
               'No reviews yet.',
-              style: TextStyle(color: Colors.black54),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           for (final it in items)
             Card(
@@ -428,9 +428,9 @@ class _ProductScreenState extends State<ProductScreen> {
                         const Spacer(),
                         Text(
                           '${it['date']}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
-                            color: Colors.black45,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -469,9 +469,9 @@ class _ProductScreenState extends State<ProductScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFEFE5D9)),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -481,20 +481,20 @@ class _ProductScreenState extends State<ProductScreen> {
               Container(
                 width: 38,
                 height: 38,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF6EBDD),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: espresso, size: 21),
+                child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 21),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 16,
-                    color: espresso,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ),
@@ -504,9 +504,7 @@ class _ProductScreenState extends State<ProductScreen> {
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: g['is_required'] == true
-                      ? const Color(0xFFFFF0DF)
-                      : const Color(0xFFF3EEE8),
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Text(
@@ -514,7 +512,7 @@ class _ProductScreenState extends State<ProductScreen> {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: g['is_required'] == true ? caramel : Colors.black54,
+                    color: g['is_required'] == true ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -542,10 +540,10 @@ class _ProductScreenState extends State<ProductScreen> {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
-          color: selected ? caramel : const Color(0xFFFCF8F2),
+          color: selected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: selected ? caramel : const Color(0xFFE7D8C8),
+            color: selected ? Theme.of(context).colorScheme.primary : Theme.of(context).dividerColor,
           ),
           boxShadow: selected
               ? const [
@@ -561,13 +559,13 @@ class _ProductScreenState extends State<ProductScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (selected) ...[
-              const Icon(Icons.check_rounded, color: Colors.white, size: 17),
+              Icon(Icons.check_rounded, color: Theme.of(context).colorScheme.onPrimary, size: 17),
               const SizedBox(width: 5),
             ],
             Text(
               '${option['name']}',
               style: TextStyle(
-                color: selected ? Colors.white : espresso,
+                color: selected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.w600,
               ),
             ),

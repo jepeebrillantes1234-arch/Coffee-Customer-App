@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../core/api.dart';
 import '../core/theme.dart';
@@ -18,6 +17,7 @@ import 'menu_screen.dart';
 import 'notifications_screen.dart';
 import 'orders_screen.dart';
 import 'promos_screen.dart';
+import 'profile_screen.dart';
 
 // Para makita pa rin ang rootTab / menuRequest ng mga file na nag-import ng root_screen.dart
 export '../state/nav.dart';
@@ -44,7 +44,7 @@ class RootScreen extends StatelessWidget {
               MenuScreen(),
               CartScreen(),
               OrdersScreen(),
-              _AccountScreen(),
+              ProfileScreen(),
             ],
           ),
           bottomNavigationBar: _BottomBar(
@@ -221,7 +221,7 @@ class _CustomerDrawerState extends State<_CustomerDrawer> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(18, 24, 16, 22),
-              decoration: const BoxDecoration(color: Color(0xFFF7F4F0)),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest),
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () => _tab(context, 4),
@@ -232,11 +232,11 @@ class _CustomerDrawerState extends State<_CustomerDrawer> {
                       height: 58,
                       child: ClipOval(
                         child: (user['avatar_url'] ?? '').toString().isEmpty
-                            ? const ColoredBox(
-                                color: Color(0xFFE8DED4),
+                            ? ColoredBox(
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                 child: Icon(
                                   Icons.person_rounded,
-                                  color: espresso,
+                                  color: Theme.of(context).colorScheme.primary,
                                   size: 34,
                                 ),
                               )
@@ -246,11 +246,11 @@ class _CustomerDrawerState extends State<_CustomerDrawer> {
                                 headers: const {
                                   'ngrok-skip-browser-warning': 'true',
                                 },
-                                errorBuilder: (_, __, ___) => const ColoredBox(
-                                  color: Color(0xFFE8DED4),
+                                errorBuilder: (_, __, ___) => ColoredBox(
+                                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                   child: Icon(
                                     Icons.person_rounded,
-                                    color: espresso,
+                                    color: Theme.of(context).colorScheme.primary,
                                     size: 34,
                                   ),
                                 ),
@@ -262,11 +262,11 @@ class _CustomerDrawerState extends State<_CustomerDrawer> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Customer Profile',
                             style: TextStyle(
                               fontSize: 11,
-                              color: Color(0xFF74675E),
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -274,18 +274,18 @@ class _CustomerDrawerState extends State<_CustomerDrawer> {
                             '${user['name'] ?? 'Customer'}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
-                              color: espresso,
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const Icon(
+                    Icon(
                       Icons.chevron_right_rounded,
-                      color: Color(0xFF74675E),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ],
                 ),
@@ -387,7 +387,7 @@ class _CustomerDrawerState extends State<_CustomerDrawer> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(
             children: [
-              Icon(icon, color: color ?? espresso),
+              Icon(icon, color: color ?? Theme.of(context).colorScheme.onSurface),
               const SizedBox(width: 32),
               Expanded(
                 child: Text(
@@ -396,7 +396,7 @@ class _CustomerDrawerState extends State<_CustomerDrawer> {
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: color ?? espresso,
+                    color: color ?? Theme.of(context).colorScheme.onSurface,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -425,594 +425,6 @@ class _CustomerDrawerState extends State<_CustomerDrawer> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _AccountScreen extends StatefulWidget {
-  const _AccountScreen();
-
-  @override
-  State<_AccountScreen> createState() => _AccountScreenState();
-}
-
-class _AccountScreenState extends State<_AccountScreen> {
-  final _imagePicker = ImagePicker();
-  bool _avatarBusy = false;
-
-  Future<void> _changeAvatar() async {
-    try {
-      final image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-        maxWidth: 1200,
-      );
-      if (image == null || !mounted) return;
-      setState(() => _avatarBusy = true);
-      await Api.I.uploadAvatar(image.path);
-      if (mounted) {
-        setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile photo updated.')),
-        );
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not open the gallery or upload the photo.',
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _avatarBusy = false);
-    }
-  }
-
-  Widget _avatarButton({double size = 68}) {
-    final url = (Api.I.user?['avatar_url'] ?? '').toString();
-    return InkWell(
-      onTap: _avatarBusy ? null : _changeAvatar,
-      customBorder: const CircleBorder(),
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned.fill(
-              child: ClipOval(
-                child: url.isEmpty
-                    ? ColoredBox(
-                        color: const Color(0xFFF3E9DC),
-                        child: Icon(
-                          Icons.person,
-                          color: espresso,
-                          size: size * .55,
-                        ),
-                      )
-                    : NetImage(url, width: size, height: size),
-              ),
-            ),
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: Container(
-                width: 24,
-                height: 24,
-                decoration: const BoxDecoration(
-                  color: espresso,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: _avatarBusy
-                    ? const SizedBox(
-                        width: 13,
-                        height: 13,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(
-                        Icons.camera_alt_rounded,
-                        size: 13,
-                        color: Colors.white,
-                      ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _editProfile() async {
-    final u = Api.I.user ?? {};
-    final name = TextEditingController(text: '${u['name'] ?? ''}');
-    final phone = TextEditingController(text: '${u['phone'] ?? ''}');
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Edit profile'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: name,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(labelText: 'Full name'),
-              ),
-              TextField(
-                controller: phone,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Phone number'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(minimumSize: const Size(100, 44)),
-            onPressed: () {
-              if (name.text.trim().isEmpty) return;
-              Navigator.pop(ctx, true);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) {
-      try {
-        await Api.I.updateProfile(
-          name: name.text.trim(),
-          phone: phone.text.trim(),
-        );
-        if (mounted) {
-          setState(() {});
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Profile updated.')));
-        }
-      } on ApiException catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(e.message)));
-        }
-      }
-    }
-    name.dispose();
-    phone.dispose();
-  }
-
-  Future<void> _changePassword() async {
-    final current = TextEditingController();
-    final next = TextEditingController();
-    final confirm = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    final accepted = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Change password'),
-        content: Form(
-          key: formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: current,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Current password'),
-                  validator: (value) => (value == null || value.isEmpty)
-                      ? 'Enter your current password'
-                      : null,
-                ),
-                TextFormField(
-                  controller: next,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'New password',
-                    helperText: 'Use at least 8 characters',
-                  ),
-                  validator: (value) => (value == null || value.length < 8)
-                      ? 'Password must be at least 8 characters'
-                      : null,
-                ),
-                TextFormField(
-                  controller: confirm,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Confirm new password',
-                  ),
-                  validator: (value) => value != next.text
-                      ? 'Passwords do not match'
-                      : null,
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState?.validate() ?? false) {
-                Navigator.pop(ctx, true);
-              }
-            },
-            child: const Text('Update password'),
-          ),
-        ],
-      ),
-    );
-    if (accepted == true) {
-      try {
-        await Api.I.changePassword(
-          currentPassword: current.text,
-          password: next.text,
-          passwordConfirmation: confirm.text,
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Password updated successfully.')),
-          );
-        }
-      } on ApiException catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(e.message)));
-        }
-      }
-    }
-    current.dispose();
-    next.dispose();
-    confirm.dispose();
-  }
-
-  Future<void> _deleteAccount() async {
-    final password = TextEditingController();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete account?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Your account will be deleted and you will lose access to it.',
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: password,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Enter your password to confirm',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) {
-      password.dispose();
-      return;
-    }
-    try {
-      await Api.I.deleteAccount(password.text);
-      Cart.I.clear();
-      Favorites.I.clear();
-      if (mounted)
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const AuthScreen()),
-          (_) => false,
-        );
-    } on ApiException catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-    } finally {
-      password.dispose();
-    }
-  }
-
-  Future<void> _logout() async {
-    Cart.I.clear();
-    Favorites.I.clear();
-    await Api.I.logout();
-    rootTab.value = 0;
-    if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const AuthScreen()),
-        (_) => false,
-      );
-    }
-  }
-
-  Future<void> _openSettings() async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: StatefulBuilder(
-          builder: (context, sheetSetState) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                title: const Text('Edit profile'),
-                subtitle: const Text('Change your full name or phone number'),
-                onTap: () => Navigator.pop(context, 'edit'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.lock_outline),
-                title: const Text('Change password'),
-                onTap: () => Navigator.pop(context, 'password'),
-              ),
-              SwitchListTile.adaptive(
-                secondary: Icon(AppThemeController.I.mode == ThemeMode.dark
-                    ? Icons.dark_mode_outlined
-                    : Icons.light_mode_outlined),
-                title: const Text('Dark mode'),
-                value: AppThemeController.I.mode == ThemeMode.dark,
-                onChanged: (enabled) async {
-                  await AppThemeController.I.setMode(
-                    enabled ? ThemeMode.dark : ThemeMode.light,
-                  );
-                  sheetSetState(() {});
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text(
-                  'Delete account',
-                  style: TextStyle(color: Colors.red),
-                ),
-                onTap: () => Navigator.pop(context, 'delete'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.logout_rounded),
-                title: const Text('Log out'),
-                onTap: () => Navigator.pop(context, 'logout'),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (!mounted) return;
-    if (action == 'edit') await _editProfile();
-    if (action == 'password') await _changePassword();
-    if (action == 'delete') await _deleteAccount();
-    if (action == 'logout') await _logout();
-  }
-
-  void _openPaymentInfo() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Payment methods'),
-        content: const Text(
-          'Choose an available payment method at checkout. Depending on the order, you can pay with Cash on Delivery or GCash.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openHelp() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Help & Support'),
-        content: const Text(
-          'For help with an order, open Orders and select it to view its status and rider details.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openAbout() {
-    showAboutDialog(
-      context: context,
-      applicationName: 'KJM Coffee Shop',
-      applicationIcon: const Icon(
-        Icons.coffee_rounded,
-        color: espresso,
-        size: 36,
-      ),
-      applicationLegalese: 'Customer app',
-    );
-  }
-
-  Widget _profileRow(BuildContext context, IconData icon, String title, VoidCallback onTap) =>
-      ListTile(
-        leading: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 21),
-        title: Text(
-          title,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        trailing: Icon(
-          Icons.chevron_right_rounded,
-          size: 20,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        visualDensity: const VisualDensity(vertical: -1),
-        onTap: onTap,
-      );
-
-  Widget _profileMenuCard(BuildContext context, List<Widget> children) => Card(
-    elevation: 0,
-    color: Theme.of(context).cardColor,
-    shape: RoundedRectangleBorder(
-      side: BorderSide(color: Theme.of(context).dividerColor),
-      borderRadius: BorderRadius.circular(18),
-    ),
-    child: Column(children: children),
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    final u = Api.I.user ?? {};
-    void open(Widget page) =>
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Profile',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Settings',
-            onPressed: _openSettings,
-            icon: const Icon(Icons.settings_outlined),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 8, 4, 22),
-            child: Row(
-              children: [
-                _avatarButton(size: 76),
-                const SizedBox(width: 15),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${u['name'] ?? 'Customer'}',
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Customer account',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Edit profile',
-                  onPressed: _editProfile,
-                  icon: const Icon(Icons.edit_outlined, size: 20),
-                ),
-              ],
-            ),
-          ),
-          _profileMenuCard(context, [
-            _profileRow(
-              context,
-              Icons.receipt_long_outlined,
-              'My Orders',
-              () => rootTab.value = 3,
-            ),
-            const Divider(height: 1, indent: 52),
-            _profileRow(
-              context,
-              Icons.location_on_outlined,
-              'Addresses',
-              () => open(const AddressesScreen()),
-            ),
-            const Divider(height: 1, indent: 52),
-            _profileRow(
-              context,
-              Icons.credit_card_outlined,
-              'Payment Methods',
-              _openPaymentInfo,
-            ),
-            const Divider(height: 1, indent: 52),
-            _profileRow(
-              context,
-              Icons.favorite_border_rounded,
-              'Favorites',
-              () => open(const FavoritesScreen()),
-            ),
-            const Divider(height: 1, indent: 52),
-            _profileRow(
-              context,
-              Icons.notifications_none_rounded,
-              'Notifications',
-              () => open(const NotificationsScreen()),
-            ),
-            const Divider(height: 1, indent: 52),
-            _profileRow(
-              context,
-              Icons.help_outline_rounded,
-              'Help & Support',
-              _openHelp,
-            ),
-            const Divider(height: 1, indent: 52),
-            _profileRow(context, Icons.info_outline_rounded, 'About', _openAbout),
-          ]),
-          const SizedBox(height: 22),
-          SizedBox(
-            height: 50,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFE86B68),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(13),
-                ),
-              ),
-              onPressed: _logout,
-              child: const Text(
-                'Log Out',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

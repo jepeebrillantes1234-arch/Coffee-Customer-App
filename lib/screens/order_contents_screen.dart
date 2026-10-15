@@ -18,8 +18,6 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
   String? _error;
   bool _loading = true;
 
-  static const _coffee = Color(0xFF512D1C);
-
   @override
   void initState() {
     super.initState();
@@ -59,14 +57,14 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
     );
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFBF9F6),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFBF9F6),
-        foregroundColor: _coffee,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
         title: const Text('Order details'),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _coffee))
+          ? const Center(child: CircularProgressIndicator())
           : order == null
           ? Center(
               child: Column(
@@ -83,7 +81,7 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: Column(
@@ -99,13 +97,13 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
                       const SizedBox(height: 6),
                       Text(
                         '${order['order_type'] == 'delivery' ? 'Delivery' : 'Pickup'} · ${dateTimeText(order['created_at'])}',
-                        style: const TextStyle(color: Colors.black54),
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '$quantity ${quantity == 1 ? 'item' : 'items'} ordered',
-                        style: const TextStyle(
-                          color: _coffee,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -116,7 +114,7 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: Column(
@@ -146,7 +144,7 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: Column(
@@ -208,8 +206,8 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
                 ? Container(
                     width: 58,
                     height: 58,
-                    color: const Color(0xFFF3EADF),
-                    child: const Icon(Icons.coffee_rounded, color: _coffee),
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    child: Icon(Icons.coffee_rounded, color: Theme.of(context).colorScheme.primary),
                   )
                 : NetImage(image, width: 58, height: 58),
           ),
@@ -226,7 +224,7 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
                   const SizedBox(height: 3),
                   Text(
                     options,
-                    style: const TextStyle(color: Colors.black54, fontSize: 12),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
                   ),
                 ],
               ],

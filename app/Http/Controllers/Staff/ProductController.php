@@ -14,12 +14,22 @@ class ProductController extends Controller
         return view('staff.menu.index', compact('categories'));
     }
 
+    public function partial()
+    {
+        $categories = Category::with(['products' => fn ($q) => $q->orderBy('name')])->orderBy('sort_order')->get();
+        return response()->view('staff.menu._items', compact('categories'));
+    }
+
     // I-toggle ang Available <-> Sold out
     public function toggle(Product $product)
     {
         $product->update(['is_available' => !$product->is_available]);
         Activity::log('availability', 'products', "{$product->name}: " . ($product->is_available ? 'available' : 'sold out'));
 
-        return back()->with('success', "{$product->name} ay " . ($product->is_available ? 'available na ulit.' : 'sold out na.'));
+        $message = "{$product->name} is " . ($product->is_available ? 'available again.' : 'sold out.');
+        if (request()->expectsJson()) {
+            return response()->json(['success' => true, 'message' => $message]);
+        }
+        return back()->with('success', $message);
     }
 }

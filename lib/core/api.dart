@@ -31,6 +31,7 @@ class Api {
   String? _token;
   Map<String, dynamic>? user;
   bool get loggedIn => _token != null;
+  String? get accessToken => _token;
   String? get role => user?['role']?.toString();
 
   String? _resolveAvatarUrl(dynamic value) {
