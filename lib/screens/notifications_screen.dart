@@ -21,6 +21,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   String? _error;
   StreamSubscription<Map<String, dynamic>>? _liveSubscription;
 
+  int? _intValue(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -44,11 +50,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (!mounted) return;
       setState(() {
         _items = mapList(response['items']);
-        _hadUnread = ((response['unread'] as num?) ?? 0) > 0;
+        _hadUnread = (_intValue(response['unread']) ?? 0) > 0;
         _loading = false;
         _error = null;
       });
-      if (((response['unread'] as num?) ?? 0) > 0) {
+      if ((_intValue(response['unread']) ?? 0) > 0) {
         await Api.I.readAllNotifications();
       }
     } on ApiException catch (e) {
@@ -265,7 +271,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final status = _status(notification);
     final color = _statusColor(status, context);
     final data = notification['data'];
-    final orderId = data is Map ? (data['order_id'] as num?)?.toInt() : null;
+    final orderId = data is Map ? _intValue(data['order_id']) : null;
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(19),
