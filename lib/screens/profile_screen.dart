@@ -11,6 +11,7 @@ import 'addresses_screen.dart';
 import 'auth_screen.dart';
 import 'favorites_screen.dart';
 import 'notifications_screen.dart';
+import 'customer_service_sheet.dart';
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -427,23 +428,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _openHelp() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Help & Support'),
-        content: const Text(
-          'For help with an order, open Orders and select it to view its status and rider details.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
+  void _openHelp() => showCustomerServiceSheet(context);
 
   void _openAbout() {
     showAboutDialog(
@@ -462,24 +447,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final colors = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 76),
+        constraints: const BoxConstraints(minHeight: 68),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             children: [
-              Container(
+              SizedBox(
                 width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: colors.primary.withValues(alpha: .09),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                alignment: Alignment.center,
-                child: Icon(icon, color: colors.primary, size: 28),
+                child: Icon(icon, color: colors.primary, size: 26),
               ),
-              const SizedBox(width: 17),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   title,
@@ -497,25 +475,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
-
-  Widget _profileMenuCard(BuildContext context, List<Widget> children) => Container(
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: .55)),
-      borderRadius: BorderRadius.circular(24),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? .08 : .035),
-          blurRadius: 18,
-          offset: const Offset(0, 7),
-        ),
-      ],
-    ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Column(children: children),
-    ),
-  );
 
   @override
   Widget build(BuildContext context) {
@@ -584,81 +543,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
-          _profileMenuCard(context, [
+          Column(children: [
             _profileRow(
               context,
               Icons.receipt_long_outlined,
               'My Orders',
               () => rootTab.value = 3,
             ),
-            const Divider(height: 1, indent: 88, endIndent: 18),
+            const Divider(height: 1, indent: 74),
             _profileRow(
               context,
               Icons.location_on_outlined,
               'Addresses',
               () => open(const AddressesScreen()),
             ),
-            const Divider(height: 1, indent: 88, endIndent: 18),
+            const Divider(height: 1, indent: 74),
             _profileRow(
               context,
               Icons.credit_card_outlined,
               'Payment Methods',
               _openPaymentInfo,
             ),
-            const Divider(height: 1, indent: 88, endIndent: 18),
+            const Divider(height: 1, indent: 74),
             _profileRow(
               context,
               Icons.favorite_border_rounded,
               'Favorites',
               () => open(const FavoritesScreen()),
             ),
-            const Divider(height: 1, indent: 88, endIndent: 18),
+            const Divider(height: 1, indent: 74),
             _profileRow(
               context,
               Icons.notifications_none_rounded,
               'Notifications',
               () => open(const NotificationsScreen()),
             ),
-            const Divider(height: 1, indent: 88, endIndent: 18),
+            const Divider(height: 1, indent: 74),
             _profileRow(
               context,
               Icons.help_outline_rounded,
               'Help & Support',
               _openHelp,
             ),
-            const Divider(height: 1, indent: 88, endIndent: 18),
+            const Divider(height: 1, indent: 74),
             _profileRow(context, Icons.info_outline_rounded, 'About', _openAbout),
           ]),
-          const SizedBox(height: 22),
-          InkWell(
-            onTap: _logout,
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              height: 68,
-              padding: const EdgeInsets.symmetric(horizontal: 22),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.error.withValues(alpha: .09),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.logout_rounded, color: Theme.of(context).colorScheme.error, size: 28),
-                  const SizedBox(width: 24),
-                  Expanded(
-                    child: Text(
-                      'Log Out',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 17,
-                      ),
-                    ),
-                  ),
-                  Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.error, size: 26),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
     );

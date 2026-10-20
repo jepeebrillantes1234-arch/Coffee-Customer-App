@@ -173,31 +173,23 @@ class _OrdersScreenState extends State<OrdersScreen> {
           icon: Icon(Icons.arrow_back_rounded, color: Theme.of(context).colorScheme.primary, size: 28),
         ),
         titleSpacing: 0,
-        title: Row(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.coffee_rounded, color: Theme.of(context).colorScheme.primary, size: 34),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'My Orders',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  Text(
-                    'Track your orders and deliveries',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
-                  ),
-                ],
+            Text(
+              'My Orders',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
               ),
+            ),
+            Text(
+              'Track your orders and deliveries',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
             ),
           ],
         ),
@@ -375,7 +367,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         height: 78,
                         color: Theme.of(context).colorScheme.surfaceContainerHighest,
                         child: Icon(
-                          Icons.coffee_rounded,
+                          Icons.receipt_long_rounded,
                           color: Theme.of(context).colorScheme.onSurface,
                           size: 34,
                         ),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,6 +35,8 @@ class Api {
   bool get loggedIn => _token != null;
   String? get accessToken => _token;
   String? get role => user?['role']?.toString();
+  Future<void> Function()? onAuthenticated;
+  Future<void> Function()? onBeforeLogout;
 
   String? _resolveAvatarUrl(dynamic value) {
     final raw = value?.toString().trim();
@@ -106,6 +110,10 @@ class Api {
         await p.setString('user_avatar_url', avatarUrl);
       }
     }
+    final callback = onAuthenticated;
+    if (token != null && callback != null) {
+      unawaited(callback());
+    }
   }
 
   Future<Map<String, dynamic>> _call(
@@ -115,6 +123,7 @@ class Api {
     Map<String, dynamic>? query,
     bool auth = true,
     String? tokenOverride,
+    Map<String, String>? extraHeaders,
   }) async {
     final token = tokenOverride ?? _token;
     try {
@@ -124,9 +133,10 @@ class Api {
         queryParameters: query,
         options: Options(
           method: method,
-          headers: (auth && token != null)
-              ? {'Authorization': 'Bearer $token'}
-              : null,
+          headers: {
+            if (auth && token != null) 'Authorization': 'Bearer $token',
+            ...?extraHeaders,
+          },
         ),
       );
       final data = res.data;
@@ -211,6 +221,83 @@ class Api {
     );
   }
 
+  /// Public support contact configured by an administrator in Laravel.
+  Future<Map<String, dynamic>> supportContact() async =>
+      Map<String, dynamic>.from(
+        _d(await _call('GET', '/support/contact', auth: false)) as Map,
+      );
+
+  Future<Map<String, dynamic>?> supportConversation() async {
+    final value = _d(await _call('GET', '/support/conversation'));
+    return value is Map ? Map<String, dynamic>.from(value) : null;
+  }
+
+  Future<Map<String, dynamic>> startSupportConversation() async =>
+      Map<String, dynamic>.from(
+        _d(await _call('POST', '/support/conversations')) as Map,
+      );
+
+  Future<Map<String, dynamic>> startGuestSupportConversation({
+    required String name,
+    required String contact,
+  }) async =>
+      Map<String, dynamic>.from(
+        _d(await _call(
+          'POST',
+          '/support/guest/conversations',
+          auth: false,
+          body: {'name': name, 'contact': contact},
+        )) as Map,
+      );
+
+  Future<Map<String, dynamic>> supportConversationMessages(int id) async =>
+      Map<String, dynamic>.from(
+        _d(await _call('GET', '/support/conversations/$id')) as Map,
+      );
+
+  Future<Map<String, dynamic>> guestSupportConversationMessages(
+    String uuid,
+    String token,
+  ) async =>
+      Map<String, dynamic>.from(
+        _d(await _call(
+          'GET',
+          '/support/guest/conversations/$uuid',
+          auth: false,
+          extraHeaders: {'X-Support-Token': token},
+        )) as Map,
+      );
+
+  Future<Map<String, dynamic>> sendSupportMessage({
+    required int conversationId,
+    required String body,
+    String? attachmentPath,
+    int? orderId,
+    String? guestUuid,
+    String? guestToken,
+  }) async {
+    final form = FormData.fromMap({
+      if (body.trim().isNotEmpty) 'body': body.trim(),
+      if (orderId != null) 'order_id': orderId,
+      if (attachmentPath != null)
+        'attachment': await MultipartFile.fromFile(attachmentPath),
+    });
+    final path = guestUuid == null
+        ? '/support/conversations/$conversationId/messages'
+        : '/support/guest/conversations/$guestUuid/messages';
+    return Map<String, dynamic>.from(
+      _d(await _call(
+        'POST',
+        path,
+        body: form,
+        auth: guestUuid == null,
+        extraHeaders: guestToken == null
+            ? null
+            : {'X-Support-Token': guestToken},
+      )) as Map,
+    );
+  }
+
   Future<void> register(
     String name,
     String username,
@@ -242,6 +329,9 @@ class Api {
   }
 
   Future<void> logout() async {
+    try {
+      await onBeforeLogout?.call();
+    } catch (_) {}
     try {
       await _call('POST', '/auth/logout');
     } catch (_) {}
@@ -374,6 +464,27 @@ class Api {
 
   Future<void> readAllNotifications() async {
     await _call('POST', '/notifications/read-all');
+  }
+
+  /// Requires the Laravel API to authenticate this token and upsert it for
+  /// the signed-in user at POST /notifications/device-token.
+  Future<void> registerFcmToken(String token) async {
+    await _call(
+      'POST',
+      '/notifications/device-token',
+      body: {
+        'token': token,
+        'platform': defaultTargetPlatform.name,
+      },
+    );
+  }
+
+  Future<void> unregisterFcmToken(String token) async {
+    await _call(
+      'DELETE',
+      '/notifications/device-token',
+      body: {'token': token},
+    );
   }
 
   // ---------- PROFILE ----------

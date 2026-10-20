@@ -6,10 +6,8 @@ import '../core/api.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
 import '../state/cart.dart';
-import '../state/favorites.dart';
 import '../state/nav.dart';
 import 'addresses_screen.dart';
-import 'auth_screen.dart';
 import 'cart_screen.dart';
 import 'favorites_screen.dart';
 import 'home_screen.dart';
@@ -195,21 +193,6 @@ class _CustomerDrawerState extends State<_CustomerDrawer> {
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
   }
 
-  Future<void> _logout(BuildContext context) async {
-    final navigator = Navigator.of(context);
-    Navigator.pop(context);
-    Cart.I.clear();
-    Favorites.I.clear();
-    await Api.I.logout();
-    rootTab.value = 0;
-    if (navigator.mounted) {
-      navigator.pushAndRemoveUntil(
-        MaterialPageRoute<void>(builder: (_) => const AuthScreen()),
-        (_) => false,
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = Api.I.user ?? {};
@@ -354,14 +337,6 @@ class _CustomerDrawerState extends State<_CustomerDrawer> {
                   ),
                 ],
               ),
-            ),
-            const Divider(height: 1),
-            _item(
-              context,
-              Icons.logout,
-              'Log out',
-              () => _logout(context),
-              color: const Color(0xFF8D3C32),
             ),
             const SizedBox(height: 8),
           ],

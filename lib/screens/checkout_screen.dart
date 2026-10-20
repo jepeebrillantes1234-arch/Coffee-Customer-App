@@ -529,14 +529,33 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     children: [
                       ListTile(
                         dense: true,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        selected: _paymentMethod != 'qrph',
+                        selectedTileColor: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: .06),
                         onTap: () => setState(
                           () => _paymentMethod = _type == 'delivery'
                               ? 'cod'
                               : 'cash',
                         ),
-                        leading: Icon(
-                          Icons.payments_outlined,
-                          color: Theme.of(context).colorScheme.primary,
+                        leading: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(13),
+                          ),
+                          child: Icon(
+                            _type == 'delivery'
+                                ? Icons.local_shipping_rounded
+                                : Icons.storefront_rounded,
+                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            size: 23,
+                          ),
                         ),
                         title: Text(
                           _type == 'delivery'
@@ -566,13 +585,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       const Divider(height: 1, indent: 54),
                       ListTile(
                         dense: true,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        selected: _paymentMethod == 'qrph',
+                        selectedTileColor: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: .06),
                         enabled: AppState.online,
                         onTap: AppState.online
                             ? () => setState(() => _paymentMethod = 'qrph')
                             : null,
-                        leading: Icon(
-                          Icons.credit_card_outlined,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        leading: Container(
+                          width: 42,
+                          height: 42,
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Theme.of(context).dividerColor),
+                          ),
+                          child: Image.asset(
+                            'assets/images/qrph.png',
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.qr_code_2_rounded,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
                         ),
                         title: Text(
                           'QRPh',

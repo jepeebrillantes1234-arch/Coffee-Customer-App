@@ -121,7 +121,29 @@ class _PaymentScreenState extends State<PaymentScreen>
           _snack('The order was cancelled because payment was not completed.');
           Navigator.of(context).pop();
         } else {
-          _snack('Payment received. Thank you! 🎉');
+          await showDialog<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (dialogContext) => AlertDialog(
+              icon: const Icon(
+                Icons.check_circle_rounded,
+                color: Colors.green,
+                size: 56,
+              ),
+              title: const Text('Successful Payment'),
+              content: const Text(
+                'Your QRPh payment has been verified. The shop is processing your order.',
+                textAlign: TextAlign.center,
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('View Order'),
+                ),
+              ],
+            ),
+          );
+          if (!mounted) return;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => OrderDetailScreen(id: _id)),
           );
@@ -183,10 +205,33 @@ class _PaymentScreenState extends State<PaymentScreen>
           padding: const EdgeInsets.all(20),
           children: [
             const SizedBox(height: 10),
-            const Text(
-              '💙',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 56),
+            Align(
+              child: Container(
+                width: 104,
+                height: 104,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: Theme.of(context).dividerColor),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(context).colorScheme.shadow.withValues(alpha: .08),
+                      blurRadius: 14,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Image.asset(
+                  'assets/images/qrph.png',
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.qr_code_2_rounded,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
             ),
             const SizedBox(height: 8),
             const Text(

@@ -8,6 +8,7 @@ import '../core/config.dart';
 import '../core/role_home.dart';
 import '../core/theme.dart';
 import 'register_screen.dart';
+import 'customer_service_sheet.dart';
 
 final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 Future<void>? _googleSignInInitialization;
@@ -409,6 +410,15 @@ class _AuthScreenState extends State<AuthScreen> {
                           ],
                         ),
                       ),
+
+                    Align(
+                      alignment: Alignment.center,
+                      child: TextButton.icon(
+                        onPressed: () => showCustomerServiceSheet(context),
+                        icon: const Icon(Icons.support_agent_outlined, size: 19),
+                        label: const Text('Contact Customer Service'),
+                      ),
+                    ),
 
                     if (_error != null) ...[
                       const SizedBox(height: 12),

@@ -9,6 +9,7 @@ import '../core/api.dart';
 import '../core/realtime.dart';
 import '../core/theme.dart';
 import '../core/util.dart';
+import '../state/nav.dart';
 import 'payment_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
@@ -136,6 +137,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  Future<void> _openRiderMap(
+    Map<String, dynamic> order,
+    Map<String, dynamic> tracking,
+    String address,
+  ) => showDialog<void>(
+    context: context,
+    builder: (_) => Dialog.fullscreen(
+      child: _LiveRiderMap(
+        orderId: widget.id,
+        orderNumber: '${order['order_number'] ?? 'Order'}',
+        address: address,
+        initialTracking: tracking,
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final o = _o;
@@ -144,6 +161,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         foregroundColor: Theme.of(context).colorScheme.onSurface,
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          tooltip: 'Back',
+          onPressed: () {
+            final navigator = Navigator.of(context);
+            if (navigator.canPop()) {
+              navigator.pop();
+            } else {
+              rootTab.value = 3;
+            }
+          },
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
         title: const Text('Track Order'),
       ),
       body: _loading
@@ -194,9 +224,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     ];
     final isDelivered = status == 'delivered' || status == 'completed';
     final isOnRoute = status == 'on_the_way' || status == 'picked_up';
-    final currentStep = isDelivered ? 2 : (isOnRoute ? 1 : 0);
+    final currentStep = isDelivered
+        ? 3
+        : isOnRoute
+        ? 2
+        : (status == 'preparing' || status == 'ready' || status == 'rider_assigned')
+        ? 1
+        : status == 'confirmed'
+        ? 0
+        : -1;
     final eta = rider?['eta_min'];
     final address = (o['delivery_address'] ?? dest['address'] ?? '').toString();
+
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
@@ -281,11 +320,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 const SizedBox(height: 22),
                 Row(
                   children: [
-                    _trackingStep('Preparing', 0, currentStep),
+                    _trackingStep('Confirm', 0, currentStep),
                     Expanded(child: _progressLine(currentStep >= 1)),
-                    _trackingStep('Out for delivery', 1, currentStep),
+                    _trackingStep('Preparing', 1, currentStep),
                     Expanded(child: _progressLine(currentStep >= 2)),
-                    _trackingStep('Delivered', 2, currentStep),
+                    _trackingStep('Out for Delivery', 2, currentStep),
+                    Expanded(child: _progressLine(currentStep >= 3)),
+                    _trackingStep('Delivered', 3, currentStep),
                   ],
                 ),
               ],
@@ -300,102 +341,94 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               height: 300,
               child: destinationPoint == null
                   ? _mapPlaceholder(address)
-                  : FlutterMap(
-                      key: ValueKey(
-                        '${riderPoint?.latitude}:${riderPoint?.longitude}',
-                      ),
-                      options: MapOptions(
-                        initialCenter: riderPoint ?? destinationPoint,
-                        initialZoom: 15,
-                        initialCameraFit: points.length > 1
-                            ? CameraFit.bounds(
-                                bounds: LatLngBounds.fromPoints(points),
-                                padding: const EdgeInsets.all(52),
-                                maxZoom: 16,
-                              )
-                            : null,
-                      ),
+                  : Stack(
                       children: [
-                        TileLayer(
-                          urlTemplate:
-                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          userAgentPackageName: 'com.kjmcoffeebrew.app',
-                        ),
-                        MarkerLayer(
-                          markers: [
-                            if (shopPoint != null)
-                              Marker(
-                                point: shopPoint,
-                                width: 42,
-                                height: 48,
-                                child: _mapPin(
-                                  Icons.storefront_rounded,
-                                  caramel,
-                                ),
-                              ),
-                            Marker(
-                              point: destinationPoint,
-                              width: 42,
-                              height: 48,
-                              child: _mapPin(Icons.home_rounded, espresso),
+                        FlutterMap(
+                          options: MapOptions(
+                            initialCenter: riderPoint ?? destinationPoint,
+                            initialZoom: 15,
+                            initialCameraFit: points.length > 1
+                                ? CameraFit.bounds(
+                                    bounds: LatLngBounds.fromPoints(points),
+                                    padding: const EdgeInsets.all(52),
+                                    maxZoom: 16,
+                                  )
+                                : null,
+                          ),
+                          children: [
+                            TileLayer(
+                              urlTemplate:
+                                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                              userAgentPackageName: 'com.kjmcoffeebrew.app',
                             ),
                             if (riderPoint != null)
-                              Marker(
-                                point: riderPoint,
-                                width: 48,
-                                height: 48,
-                                child: _mapPin(
-                                  Icons.delivery_dining_rounded,
-                                  Colors.red.shade700,
-                                ),
+                              PolylineLayer(
+                                polylines: [
+                                  Polyline(
+                                    points: [destinationPoint, riderPoint],
+                                    color: caramel,
+                                    strokeWidth: 5,
+                                  ),
+                                ],
                               ),
-                            if (riderPoint != null)
-                              Marker(
-                                point: LatLng(
-                                  (riderPoint.latitude +
-                                          destinationPoint.latitude) /
-                                      2,
-                                  (riderPoint.longitude +
-                                          destinationPoint.longitude) /
-                                      2,
-                                ),
-                                width: 174,
-                                height: 40,
-                                child: Container(
-                                  alignment: Alignment.center,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 7,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.surfaceContainerLow,
-                                    borderRadius: BorderRadius.circular(20),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Theme.of(context).colorScheme.shadow,
-                                        blurRadius: 6,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Text(
-                                    'Rider is ${Distance().as(LengthUnit.Kilometer, riderPoint, destinationPoint).toStringAsFixed(1)} km away',
-                                    maxLines: 1,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
+                            MarkerLayer(
+                              markers: [
+                                if (shopPoint != null)
+                                  Marker(
+                                    point: shopPoint,
+                                    width: 42,
+                                    height: 48,
+                                    child: _mapPin(
+                                      Icons.storefront_rounded,
+                                      caramel,
                                     ),
                                   ),
+                                Marker(
+                                  point: destinationPoint,
+                                  width: 42,
+                                  height: 48,
+                                  child: _mapPin(Icons.home_rounded, espresso),
                                 ),
-                              ),
+                                if (riderPoint != null)
+                                  Marker(
+                                    point: riderPoint,
+                                    width: 76,
+                                    height: 60,
+                                    child: _deliveryMapMarker(context),
+                                  ),
+                              ],
+                            ),
+                            RichAttributionWidget(
+                              attributions: [
+                                TextSourceAttribution(
+                                  'OpenStreetMap contributors',
+                                ),
+                              ],
+                            ),
                           ],
                         ),
-                        RichAttributionWidget(
-                          attributions: [
-                            TextSourceAttribution('OpenStreetMap contributors'),
-                          ],
-                        ),
+                        if (riderPoint != null)
+                          Positioned(
+                            top: 12,
+                            left: 12,
+                            child: _riderDistanceBadge(
+                              riderPoint,
+                              destinationPoint,
+                            ),
+                          ),
                       ],
                     ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: destinationPoint == null
+                  ? null
+                  : () => _openRiderMap(o, t, address),
+              icon: const Icon(Icons.map_outlined),
+              label: const Text('View Map'),
             ),
           ),
           const SizedBox(height: 9),
@@ -719,23 +752,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _trackingStep(String label, int step, int current) {
     final done = step <= current;
+    final stageColors = [Colors.blue, Colors.orange, Colors.deepOrange, Colors.green];
+    final activeColor = stageColors[step.clamp(0, stageColors.length - 1).toInt()];
     return SizedBox(
-      width: 58,
+      width: 66,
       child: Column(
         children: [
           CircleAvatar(
             radius: 12,
-            backgroundColor: done ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
+            backgroundColor: done ? activeColor : Theme.of(context).colorScheme.surfaceContainerHighest,
             child: Icon(
               step < current
                   ? Icons.check
-                  : (step == 0
-                        ? Icons.coffee_rounded
-                        : step == 1
-                        ? Icons.delivery_dining_rounded
-                        : Icons.home_rounded),
+                  : step == 0
+                  ? Icons.check_rounded
+                  : step == 1
+                  ? Icons.coffee_rounded
+                  : step == 2
+                  ? Icons.delivery_dining_rounded
+                  : Icons.home_rounded,
               size: 14,
-              color: done ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurfaceVariant,
+              color: done ? Colors.white : Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 5),
@@ -743,8 +780,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             label,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 10,
-              color: done ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 9,
+              color: done ? activeColor : Theme.of(context).colorScheme.onSurfaceVariant,
               fontWeight: done ? FontWeight.w600 : FontWeight.normal,
             ),
           ),
@@ -845,3 +882,217 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     ),
   );
 }
+
+class _LiveRiderMap extends StatefulWidget {
+  final int orderId;
+  final String orderNumber;
+  final String address;
+  final Map<String, dynamic> initialTracking;
+
+  const _LiveRiderMap({
+    required this.orderId,
+    required this.orderNumber,
+    required this.address,
+    required this.initialTracking,
+  });
+
+  @override
+  State<_LiveRiderMap> createState() => _LiveRiderMapState();
+}
+
+class _LiveRiderMapState extends State<_LiveRiderMap> {
+  late Map<String, dynamic> _tracking;
+  StreamSubscription<Map<String, dynamic>>? _subscription;
+  bool _refreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tracking = widget.initialTracking;
+    _subscription = Realtime.I.updates.listen((event) {
+      if (event['kind'] == 'order' || event['kind'] == 'delivery') {
+        _refreshLocation();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshLocation() async {
+    if (_refreshing) return;
+    _refreshing = true;
+    try {
+      final latest = await Api.I.tracking(widget.orderId);
+      if (mounted) setState(() => _tracking = latest);
+    } on ApiException {
+      // Preserve the last known location if a live refresh briefly fails.
+    } finally {
+      _refreshing = false;
+    }
+  }
+
+  LatLng? _point(dynamic value) {
+    if (value is! Map || value['lat'] == null || value['lng'] == null) {
+      return null;
+    }
+    return LatLng(dbl(value['lat']), dbl(value['lng']));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final rider = _tracking['rider'] is Map
+        ? Map<String, dynamic>.from(_tracking['rider'] as Map)
+        : null;
+    final riderPoint = _point(rider);
+    final destinationPoint = _point(_tracking['destination']);
+    final shopPoint = _point(_tracking['shop']);
+    final mapPoints = <LatLng>[
+      if (riderPoint != null) riderPoint,
+      if (destinationPoint != null) destinationPoint,
+      if (shopPoint != null && shopPoint.latitude != 0 && shopPoint.longitude != 0)
+        shopPoint,
+    ];
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Rider location · ${widget.orderNumber}',
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh location',
+            onPressed: _refreshing ? null : _refreshLocation,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: destinationPoint == null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.location_off_outlined,
+                        size: 48, color: colors.primary),
+                    const SizedBox(height: 10),
+                    const Text('Map location is not available yet.',
+                        textAlign: TextAlign.center),
+                    if (widget.address.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(widget.address,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: colors.onSurfaceVariant)),
+                    ],
+                  ],
+                ),
+              ),
+            )
+          : FlutterMap(
+              options: MapOptions(
+                initialCenter: riderPoint ?? destinationPoint,
+                initialZoom: 14,
+                initialCameraFit: mapPoints.length > 1
+                    ? CameraFit.bounds(
+                        bounds: LatLngBounds.fromPoints(mapPoints),
+                        padding: const EdgeInsets.all(48),
+                        maxZoom: 15,
+                      )
+                    : null,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.kjmcoffeebrew.app',
+                ),
+                if (riderPoint != null)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: [riderPoint, destinationPoint],
+                        color: colors.primary,
+                        strokeWidth: 5,
+                      ),
+                    ],
+                  ),
+                MarkerLayer(
+                  markers: [
+                    if (shopPoint != null &&
+                        shopPoint.latitude != 0 &&
+                        shopPoint.longitude != 0)
+                      Marker(
+                        point: shopPoint,
+                        width: 48,
+                        height: 50,
+                        child: const Icon(Icons.storefront_rounded,
+                            color: caramel, size: 38),
+                      ),
+                    Marker(
+                      point: destinationPoint,
+                      width: 48,
+                      height: 50,
+                      child: const Icon(Icons.location_on_rounded,
+                          color: Colors.red, size: 42),
+                    ),
+                    if (riderPoint != null)
+                      Marker(
+                        point: riderPoint,
+                        width: 76,
+                        height: 60,
+                        child: _deliveryMapMarker(context),
+                      ),
+                  ],
+                ),
+                RichAttributionWidget(
+                  attributions: [
+                    TextSourceAttribution('OpenStreetMap contributors'),
+                  ],
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+Widget _riderDistanceBadge(LatLng rider, LatLng customer) => Container(
+  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+  decoration: BoxDecoration(
+    color: Colors.white.withValues(alpha: .96),
+    borderRadius: BorderRadius.circular(18),
+    boxShadow: const [
+      BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 2)),
+    ],
+  ),
+  child: Text(
+    'Rider is ${Distance().as(LengthUnit.Kilometer, rider, customer).toStringAsFixed(1)} km away',
+    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+  ),
+);
+
+Widget _deliveryMapMarker(BuildContext context) => Container(
+  padding: const EdgeInsets.all(3),
+  decoration: BoxDecoration(
+    color: Theme.of(context).colorScheme.surface.withValues(alpha: .94),
+    borderRadius: BorderRadius.circular(16),
+    border: Border.all(color: caramel, width: 2),
+    boxShadow: [
+      BoxShadow(
+        color: Theme.of(context).colorScheme.shadow.withValues(alpha: .24),
+        blurRadius: 7,
+        offset: const Offset(0, 2),
+      ),
+    ],
+  ),
+  child: Image.asset(
+    'assets/images/delivery.png',
+    fit: BoxFit.contain,
+    errorBuilder: (context, error, stackTrace) => const Icon(
+      Icons.delivery_dining_rounded,
+      color: caramel,
+    ),
+  ),
+);
