@@ -50,7 +50,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_native_splash: ^2.4.0
+  flutter_native_splash: ^2.4.6
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
   # activated in the `analysis_options.yaml` file located at the root of your
@@ -72,10 +72,16 @@ flutter:
        - assets/images/
 
 flutter_native_splash:
-  color: "#121212" # Kulay ng background (Dark mode)
-  image: "assets/images/logo1.png" # Ilagay dito ang path ng logo o image mo
+  color: "#FFF8F0"
+  image: "assets/images/logo1.png"
+
   android: true
   ios: true
+
+  android_12:
+    color: "#FFF8F0"
+    image: "assets/images/logo1.png"
+    icon_background_color: "#FFF8F0"
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

@@ -34,14 +34,39 @@ class CartLine {
   };
 }
 
+class CartBundleLine {
+  final int promoId;
+  final String name;
+  final String? imageUrl;
+  final double price;
+  final double originalTotal;
+  final List<String> products;
+  int qty;
+  CartBundleLine({required this.promoId, required this.name, required this.imageUrl, required this.price, required this.originalTotal, required this.products, this.qty=1});
+  double get total => price * qty;
+  Map<String, dynamic> toPayload() => {'home_promo_id': promoId, 'quantity': qty};
+}
+
 class Cart extends ChangeNotifier {
   Cart._();
   static final Cart I = Cart._();
 
   final List<CartLine> lines = [];
+  final List<CartBundleLine> bundles = [];
 
-  int get count => lines.fold(0, (s, l) => s + l.qty);
-  double get subtotal => lines.fold(0.0, (s, l) => s + l.total);
+  int get count => lines.fold(0, (s, l) => s + l.qty) + bundles.fold(0, (s, l) => s + l.qty);
+  double get subtotal => lines.fold(0.0, (s, l) => s + l.total) + bundles.fold(0.0, (s, l) => s + l.total);
+
+  void addBundle(Map<String, dynamic> promo) {
+    final id = (promo['id'] as num).toInt();
+    final index = bundles.indexWhere((line) => line.promoId == id);
+    if (index >= 0) { bundles[index].qty++; } else {
+      final products = promo['products'] is List ? (promo['products'] as List).map((p) => '${(p as Map)['name']} × ${(p)['quantity']}').toList() : <String>[];
+      bundles.add(CartBundleLine(promoId:id,name:'${promo['name']}',imageUrl:promo['image_url']?.toString(),price:(promo['price'] as num).toDouble(),originalTotal:(promo['original_total'] as num?)?.toDouble() ?? 0,products:products));
+    }
+    notifyListeners();
+  }
+  void setBundleQty(int index, int qty) { if(qty<=0) bundles.removeAt(index); else bundles[index].qty=qty; notifyListeners(); }
 
   void add(CartLine line) {
     final i = lines.indexWhere((l) => l.key == line.key);
@@ -77,7 +102,7 @@ class Cart extends ChangeNotifier {
   }
 
   void clear() {
-    lines.clear();
+    lines.clear(); bundles.clear();
     notifyListeners();
   }
 }

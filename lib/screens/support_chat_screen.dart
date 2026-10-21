@@ -256,6 +256,50 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     FilledButton.icon(onPressed: _sending ? null : _startGuestChat, icon: const Icon(Icons.chat_bubble_outline), label: Text(_sending ? 'Connecting…' : 'Start chat')),
   ]);
 
+  Widget _senderAvatar({
+    required bool mine,
+    required bool assistant,
+    required Map<String, dynamic> item,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final rawImageUrl = mine
+        ? (Api.I.user ?? const <String, dynamic>{})['avatar_url']
+        : item['sender_avatar_url'];
+    final String? imageUrl = rawImageUrl?.toString().trim();
+    final name = mine
+        ? (_guest
+            ? _name.text.trim()
+            : '${(Api.I.user ?? const <String, dynamic>{})['name'] ?? 'Customer'}')
+        : '${item['sender_name'] ?? (assistant ? 'KJM Assistant' : 'Customer Service')}';
+    Widget fallback() => Icon(
+      assistant ? Icons.coffee_rounded : mine ? Icons.person_rounded : Icons.support_agent_rounded,
+      size: 17,
+      color: colors.onPrimaryContainer,
+    );
+    return CircleAvatar(
+      radius: 17,
+      backgroundColor: colors.primaryContainer,
+      backgroundImage: imageUrl == null || imageUrl.isEmpty
+          ? null
+          : NetworkImage(imageUrl),
+      onBackgroundImageError: imageUrl == null || imageUrl.isEmpty
+          ? null
+          : (_, __) {},
+      child: imageUrl == null || imageUrl.isEmpty
+          ? (assistant || name.isEmpty
+              ? fallback()
+              : Text(
+                  name.substring(0, 1).toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: colors.onPrimaryContainer,
+                  ),
+                ))
+          : null,
+    );
+  }
+
   Widget _bubble(Map<String, dynamic> item) {
     final sender = item['sender_type']?.toString() ?? 'customer';
     final mine = sender == 'customer';
@@ -263,28 +307,47 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     final colors = Theme.of(context).colorScheme;
     final attachment = item['attachment_url']?.toString();
     final mime = item['attachment_mime']?.toString() ?? '';
-    return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * .78),
-        margin: const EdgeInsets.symmetric(vertical: 5),
-        padding: const EdgeInsets.all(11),
-        decoration: BoxDecoration(
-          color: mine ? colors.primaryContainer : assistant ? colors.secondaryContainer : colors.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (!mine) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(assistant ? 'KJM Assistant' : 'Customer Service', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: colors.primary))),
-          if (attachment != null && attachment.isNotEmpty)
-            if (mime.startsWith('image/'))
-              GestureDetector(onTap: () => showDialog<void>(context: context, builder: (_) => Dialog(child: InteractiveViewer(child: Image.network(attachment, headers: _attachmentHeaders)))), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(attachment, headers: _attachmentHeaders, width: 230, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Text('Image unavailable'))))
-            else
-              const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.videocam_outlined, size: 18), SizedBox(width: 5), Text('Video attachment')]),
-          if ((item['body']?.toString() ?? '').isNotEmpty) Text(item['body'].toString()),
-          const SizedBox(height: 3),
-          Text(item['created_at']?.toString() ?? '', style: TextStyle(fontSize: 9, color: colors.onSurfaceVariant)),
-        ]),
+    final senderName = mine
+        ? (_guest ? (_name.text.trim().isEmpty ? 'You' : _name.text.trim()) : 'You')
+        : '${item['sender_name'] ?? (assistant ? 'KJM Assistant' : 'Customer Service')}';
+    final bubble = Container(
+      constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * .68),
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: mine ? colors.primaryContainer : assistant ? colors.secondaryContainer : colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
       ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(senderName, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: colors.primary)),
+        ),
+        if (attachment != null && attachment.isNotEmpty)
+          if (mime.startsWith('image/'))
+            GestureDetector(onTap: () => showDialog<void>(context: context, builder: (_) => Dialog(child: InteractiveViewer(child: Image.network(attachment, headers: _attachmentHeaders)))), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(attachment, headers: _attachmentHeaders, width: 230, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Text('Image unavailable'))))
+          else
+            const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.videocam_outlined, size: 18), SizedBox(width: 5), Text('Video attachment')]),
+        if ((item['body']?.toString() ?? '').isNotEmpty) Text(item['body'].toString()),
+        const SizedBox(height: 3),
+        Text(item['created_at']?.toString() ?? '', style: TextStyle(fontSize: 9, color: colors.onSurfaceVariant)),
+      ]),
+    );
+
+    return Row(
+      mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (!mine) ...[
+          _senderAvatar(mine: false, assistant: assistant, item: item),
+          const SizedBox(width: 7),
+        ],
+        bubble,
+        if (mine) ...[
+          const SizedBox(width: 7),
+          _senderAvatar(mine: true, assistant: false, item: item),
+        ],
+      ],
     );
   }
 

@@ -20,7 +20,8 @@ class CartScreen extends StatelessWidget {
         listenable: Cart.I,
         builder: (_, _) {
           final lines = Cart.I.lines;
-          if (lines.isEmpty) {
+          final bundles = Cart.I.bundles;
+          if (lines.isEmpty && bundles.isEmpty) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -51,10 +52,29 @@ class CartScreen extends StatelessWidget {
               Expanded(
                 child: ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                  itemCount: lines.length,
+                  itemCount: lines.length + bundles.length,
                   separatorBuilder: (_, _) =>
                       const Divider(height: 20, indent: 58),
                   itemBuilder: (context, index) {
+                    if (index >= lines.length) {
+                      final bundleIndex = index - lines.length;
+                      final bundle = bundles[bundleIndex];
+                      return Row(children: [
+                        ClipRRect(borderRadius: BorderRadius.circular(10), child: NetImage(bundle.imageUrl, width: 52, height: 58)),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('${bundle.name} · Bundle', style: const TextStyle(fontWeight: FontWeight.w700)),
+                          Text(bundle.products.join(', '), maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                          const SizedBox(height: 4), Text(peso(bundle.price), style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
+                          Row(mainAxisSize: MainAxisSize.min, children: [
+                            _qtyButton(context, Icons.remove, () => Cart.I.setBundleQty(bundleIndex, bundle.qty - 1)),
+                            Text('${bundle.qty}'),
+                            _qtyButton(context, Icons.add, () => Cart.I.setBundleQty(bundleIndex, bundle.qty + 1)),
+                          ]),
+                        ])),
+                        IconButton(tooltip: 'Remove bundle', onPressed: () => Cart.I.setBundleQty(bundleIndex, 0), icon: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error)),
+                      ]);
+                    }
                     final line = lines[index];
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.center,

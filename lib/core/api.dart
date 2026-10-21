@@ -43,8 +43,9 @@ class Api {
     if (raw == null || raw.isEmpty) return null;
     final parsed = Uri.tryParse(raw);
     if (parsed != null && parsed.hasScheme) return raw;
-    if (raw.startsWith('/'))
+    if (raw.startsWith('/')) {
       return Uri.parse(_dio.options.baseUrl).resolve(raw).toString();
+    }
     return raw;
   }
 
@@ -66,8 +67,8 @@ class Api {
         'email': email,
         'phone': phone,
         'role': role,
-        if (avatar != null) 'avatar': avatar,
-        if (avatarUrl != null) 'avatar_url': avatarUrl,
+        'avatar': ?avatar,
+        'avatar_url': ?avatarUrl,
       };
     }
   }
@@ -278,7 +279,7 @@ class Api {
   }) async {
     final form = FormData.fromMap({
       if (body.trim().isNotEmpty) 'body': body.trim(),
-      if (orderId != null) 'order_id': orderId,
+      'order_id': ?orderId,
       if (attachmentPath != null)
         'attachment': await MultipartFile.fromFile(attachmentPath),
     });
@@ -456,6 +457,18 @@ class Api {
     await _call('DELETE', '/addresses/$id');
   }
 
+  Future<Map<String, dynamic>> reverseGeocode(
+    double latitude,
+    double longitude,
+  ) async =>
+      Map<String, dynamic>.from(
+        _d(await _call(
+          'GET',
+          '/location/reverse-geocode',
+          query: {'latitude': latitude, 'longitude': longitude},
+        )) as Map,
+      );
+
   // ---------- NOTIFICATIONS ----------
   Future<Map<String, dynamic>> notifications() async =>
       Map<String, dynamic>.from(
@@ -559,6 +572,9 @@ class Api {
   // ---------- HOME ----------
   Future<Map<String, dynamic>> appConfig() async =>
       Map<String, dynamic>.from(_d(await _call('GET', '/app-config')) as Map);
+
+  Future<List<Map<String, dynamic>>> promos() async =>
+      mapList(_d(await _call('GET', '/promos', auth: false)));
 
   // ================= RIDER =================
   Future<Map<String, dynamic>> deliveries() async => Map<String, dynamic>.from(

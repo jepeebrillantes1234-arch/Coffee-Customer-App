@@ -392,11 +392,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 onTap: () => Navigator.pop(context, 'delete'),
               ),
-              ListTile(
-                leading: const Icon(Icons.logout_rounded),
-                title: const Text('Log out'),
-                onTap: () => Navigator.pop(context, 'logout'),
-              ),
               const SizedBox(height: 8),
             ],
           ),
@@ -407,7 +402,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (action == 'edit') await _editProfile();
     if (action == 'password') await _changePassword();
     if (action == 'delete') await _deleteAccount();
-    if (action == 'logout') await _logout();
   }
 
   void _openPaymentInfo() {
@@ -587,6 +581,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const Divider(height: 1, indent: 74),
             _profileRow(context, Icons.info_outline_rounded, 'About', _openAbout),
+            const Divider(height: 1, indent: 74),
+            _profileRow(
+              context,
+              Icons.logout_rounded,
+              'Log out',
+              _logout,
+            ),
           ]),
         ],
       ),

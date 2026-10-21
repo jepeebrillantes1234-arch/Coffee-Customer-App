@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
-import '../core/theme.dart';
-import '../core/util.dart';
 import '../state/nav.dart';
 import '../state/promo_state.dart';
 import 'product_screen.dart';
@@ -32,16 +30,22 @@ class _PromosScreenState extends State<PromosScreen> {
       _error = null;
     });
     try {
-      final cfg = await Api.I.appConfig();
+      final promos = await Api.I.promos();
       if (!mounted) return;
       setState(() {
-        _promos = cfg['promos'] is List ? mapList(cfg['promos']) : [];
+        _promos = promos;
         _loading = false;
       });
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e.message;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Unable to load promos. Please try again.';
         _loading = false;
       });
     }
@@ -60,9 +64,46 @@ class _PromosScreenState extends State<PromosScreen> {
       return;
     }
 
+    final product = promo['product'];
+    final productId = product is Map && product['id'] is num
+        ? (product['id'] as num).toInt()
+        : null;
+
+    // Check that the linked product still exists and is available before
+    // selecting the promo or opening its product page.
+    if (productId != null) {
+      try {
+        await Api.I.product(productId);
+      } on ApiException {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text(
+                'The product linked to this promo is currently unavailable. Please choose another promo.',
+              ),
+            ),
+          );
+        return;
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Unable to open this promo item. Please try again or choose another promo.',
+              ),
+            ),
+          );
+        return;
+      }
+    }
+    if (!mounted) return;
+
     final alreadySelected = SelectedPromo.I.code == promo['code'];
     SelectedPromo.I.select(promo);
-    final product = promo['product'];
     final needed = promo['type'] == 'bogo'
         ? ((promo['buy_qty'] as num?)?.toInt() ?? 1) +
               ((promo['free_qty'] as num?)?.toInt() ?? 1)
@@ -93,11 +134,9 @@ class _PromosScreenState extends State<PromosScreen> {
 
     final navigator = Navigator.of(context);
     navigator.pop();
-    if (product is Map && product['id'] is num) {
+    if (productId != null) {
       navigator.push(
-        MaterialPageRoute<void>(
-          builder: (_) => ProductScreen(id: (product['id'] as num).toInt()),
-        ),
+        MaterialPageRoute<void>(builder: (_) => ProductScreen(id: productId)),
       );
     } else {
       rootTab.value = 1;
@@ -128,9 +167,23 @@ class _PromosScreenState extends State<PromosScreen> {
     if (_loading) {
       return ListView(
         physics: scroll,
-        children: const [
-          SizedBox(height: 240),
-          Center(child: CircularProgressIndicator()),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+        children: [
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(18),
+              child: CircularProgressIndicator(),
+            ),
+          ),
+          for (var i = 0; i < 3; i++)
+            Container(
+              height: 170,
+              margin: const EdgeInsets.only(top: 14),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
         ],
       );
     }
@@ -162,7 +215,11 @@ class _PromosScreenState extends State<PromosScreen> {
         physics: scroll,
         children: [
           SizedBox(height: 130),
-          Icon(Icons.local_offer_outlined, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          Icon(
+            Icons.local_offer_outlined,
+            size: 48,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
           SizedBox(height: 14),
           Center(child: Text('No promos available right now.')),
         ],

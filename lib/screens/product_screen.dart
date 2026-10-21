@@ -103,7 +103,7 @@ class _ProductScreenState extends State<ProductScreen> {
   }
 
   double get _unit =>
-      dbl(_p?['base_price']) +
+      dbl(_p?['sale_price'] ?? _p?['base_price']) +
       _chosen.fold(0.0, (s, o) => s + dbl(o['extra_price']));
 
   void _toggle(Map<String, dynamic> g, Map<String, dynamic> o) {
@@ -238,7 +238,7 @@ class _ProductScreenState extends State<ProductScreen> {
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        peso(dbl(p['base_price'])),
+                        peso(dbl(p['sale_price'] ?? p['base_price'])),
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.primary,
                           fontSize: 20,

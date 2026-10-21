@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../core/api.dart';
@@ -10,6 +8,7 @@ import '../state/cart.dart';
 import '../state/promo_state.dart';
 import '../state/app_state.dart';
 import 'order_detail_screen.dart';
+import 'addresses_screen.dart';
 import 'payment_screen.dart';
 import 'root_screen.dart';
 
@@ -25,21 +24,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String _paymentMethod = 'cod';
   LatLng? _pin;
   final _address = TextEditingController();
+  final _locationName = TextEditingController();
   final _notes = TextEditingController();
   final _promo = TextEditingController();
-  final _map = MapController();
-
-  List<Map<String, dynamic>> _saved = [];
-  bool _saveAddress = false;
 
   Map<String, dynamic>? _quote;
   String? _error;
   bool _quoting = false;
   bool _placing = false;
-  bool _locating = false;
   int _quoteSeq = 0;
 
-  static const _defaultCenter = LatLng(14.5995, 120.9842);
 
   @override
   void initState() {
@@ -47,41 +41,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (AppState.online) _paymentMethod = 'qrph';
     _promo.text = SelectedPromo.I.code ?? ''; // Automatic code from Home
     _refresh();
-    _loadSaved();
   }
 
   @override
   void dispose() {
     _address.dispose();
+    _locationName.dispose();
     _notes.dispose();
     _promo.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadSaved() async {
-    try {
-      final a = await Api.I.addresses();
-      if (mounted) setState(() => _saved = a);
-    } catch (_) {}
-  }
-
-  void _useSaved(Map<String, dynamic> a) {
-    final ll = LatLng(dbl(a['latitude']), dbl(a['longitude']));
-    setState(() {
-      _pin = ll;
-      _address.text = '${a['full_address']}';
-      _saveAddress = false;
-    });
-    try {
-      _map.move(ll, 16);
-    } catch (_) {}
-    _refresh();
   }
 
   Map<String, dynamic> _payload({bool forOrder = false}) => {
     'order_type': _type,
     if (forOrder) 'payment_method': _paymentMethod,
     'items': Cart.I.lines.map((l) => l.toPayload()).toList(),
+    'home_promos': Cart.I.bundles.map((bundle) => bundle.toPayload()).toList(),
     if (_promo.text.trim().isNotEmpty) 'promo_code': _promo.text.trim(),
     if (_type == 'delivery' && _pin != null) 'delivery_lat': _pin!.latitude,
     if (_type == 'delivery' && _pin != null) 'delivery_lng': _pin!.longitude,
@@ -125,244 +100,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _selectDeliveryAddress() async {
-    if (_locating) return;
-    final selected = await _useGps();
-    if (!selected && mounted) await _openAddressPicker();
-  }
-
-  Future<void> _openAddressPicker() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, modalSetState) => SafeArea(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              0,
-              16,
-              16 + MediaQuery.viewInsetsOf(context).bottom,
-            ),
-            child: SizedBox(
-              height: MediaQuery.sizeOf(context).height * .72,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Delivery Address',
-                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Choose a saved address or tap the map to set your location.',
-                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  ),
-                  if (_saved.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 38,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          for (final saved in _saved)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ActionChip(
-                                avatar: const Icon(
-                                  Icons.bookmark_outline,
-                                  size: 17,
-                                ),
-                                label: Text(
-                                  '${saved['label'] ?? 'Saved address'}',
-                                ),
-                                onPressed: () {
-                                  _useSaved(saved);
-                                  Navigator.pop(sheetContext);
-                                },
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: FlutterMap(
-                        mapController: _map,
-                        options: MapOptions(
-                          initialCenter: _pin ?? _defaultCenter,
-                          initialZoom: _pin == null ? 12 : 16,
-                          onTap: (_, point) {
-                            setState(() {
-                              _pin = point;
-                              if (_address.text.trim().isEmpty) {
-                                _address.text =
-                                    'GPS ${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}';
-                              }
-                            });
-                            modalSetState(() {});
-                            _refresh();
-                          },
-                        ),
-                        children: [
-                          TileLayer(
-                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            userAgentPackageName: 'com.kjmcoffeebrew.app',
-                          ),
-                          if (_pin != null)
-                            MarkerLayer(
-                              markers: [
-                                Marker(
-                                  point: _pin!,
-                                  width: 40,
-                                  height: 40,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.red,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 3,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                          blurRadius: 6,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _address,
-                    onChanged: (_) {
-                      modalSetState(() {});
-                      _refresh();
-                    },
-                    decoration: const InputDecoration(
-                      labelText: 'Street, barangay, city, or landmark',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.location_on_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _locating
-                              ? null
-                              : () async {
-                                  await _useGps();
-                                  modalSetState(() {});
-                                },
-                          icon: _locating
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.my_location),
-                          label: const Text('Use my GPS'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      IconButton(
-                        tooltip: _saveAddress
-                            ? 'Address will be saved'
-                            : 'Save this address',
-                        onPressed: _pin == null
-                            ? null
-                            : () {
-                                setState(() => _saveAddress = !_saveAddress);
-                                modalSetState(() {});
-                              },
-                        icon: Icon(
-                          _saveAddress
-                              ? Icons.bookmark_added
-                              : Icons.bookmark_add_outlined,
-                          color: _saveAddress ? espresso : null,
-                        ),
-                      ),
-                      FilledButton(
-                        onPressed: _pin == null || _address.text.trim().isEmpty
-                            ? null
-                            : () => Navigator.pop(sheetContext),
-                        child: const Text('Done'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+    final selected = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => const AddressesScreen(selectionMode: true),
       ),
     );
-  }
-
-  Future<bool> _useGps() async {
-    if (!mounted) return false;
-    setState(() => _locating = true);
-    try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        throw 'Turn on your phone location to select your address automatically.';
-      }
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        throw 'Allow location permission to use your current location.';
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 12),
-        ),
+    if (!mounted || selected == null) return;
+    final latitude = double.tryParse('${selected['latitude']}');
+    final longitude = double.tryParse('${selected['longitude']}');
+    if (latitude == null || longitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This saved address has no valid map pin. Edit it and choose its location.')),
       );
-      final point = LatLng(position.latitude, position.longitude);
-      if (!mounted) return false;
-      setState(() {
-        _pin = point;
-        if (_address.text.trim().isEmpty || _address.text.startsWith('GPS ')) {
-          _address.text =
-              'Current location (${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)})';
-        }
-        _error = null;
-      });
-      try {
-        _map.move(point, 16);
-      } catch (_) {}
-      _refresh();
-      return true;
-    } catch (error) {
-      if (mounted) {
-        final message =
-            error is Exception && error.toString().contains('time limit')
-            ? 'Could not get your location in time. Choose your address on the map instead.'
-            : '$error';
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(message)));
-      }
-      return false;
-    } finally {
-      if (mounted) setState(() => _locating = false);
+      return;
     }
+    setState(() {
+      _pin = LatLng(latitude, longitude);
+      _address.text = '${selected['full_address'] ?? ''}';
+      _locationName.text = '${selected['label'] ?? ''}';
+      _error = null;
+    });
+    await _refresh();
   }
 
   Future<void> _place() async {
@@ -371,17 +129,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     try {
       final payload = _payload(forOrder: true);
       final order = await Api.I.placeOrder(payload);
-
-      if (_type == 'delivery' && _saveAddress && _pin != null) {
-        try {
-          await Api.I.saveAddress(
-            'Home',
-            payload['delivery_address'] as String,
-            _pin!.latitude,
-            _pin!.longitude,
-          );
-        } catch (_) {}
-      }
 
       Cart.I.clear();
       SelectedPromo.I.clear();
@@ -495,7 +242,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       title: Text(
-                        address.isEmpty ? 'Choose a delivery address' : address,
+                        address.isEmpty
+                            ? 'Choose a delivery address'
+                            : (_locationName.text.trim().isEmpty
+                                  ? address
+                                  : _locationName.text.trim()),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -506,19 +257,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       subtitle: Text(
                         _pin == null
                             ? 'Required for delivery'
-                            : '${_pin!.latitude.toStringAsFixed(5)}, ${_pin!.longitude.toStringAsFixed(5)}',
+                            : '${address.isEmpty ? '' : '$address\n'}${_pin!.latitude.toStringAsFixed(5)}, ${_pin!.longitude.toStringAsFixed(5)}',
                         style: TextStyle(
                           fontSize: 11,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
-                      trailing: _locating
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.chevron_right_rounded),
+                      trailing: const Icon(Icons.chevron_right_rounded),
                     ),
                   ),
                   const SizedBox(height: 17),
@@ -533,9 +278,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                         selected: _paymentMethod != 'qrph',
-                        selectedTileColor: Theme.of(context)
-                            .colorScheme
-                            .primary
+                        selectedTileColor: Theme.of(context).colorScheme.primary
                             .withValues(alpha: .06),
                         onTap: () => setState(
                           () => _paymentMethod = _type == 'delivery'
@@ -546,14 +289,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           width: 42,
                           height: 42,
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primaryContainer,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primaryContainer,
                             borderRadius: BorderRadius.circular(13),
                           ),
                           child: Icon(
                             _type == 'delivery'
                                 ? Icons.local_shipping_rounded
                                 : Icons.storefront_rounded,
-                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer,
                             size: 23,
                           ),
                         ),
@@ -589,9 +336,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                         selected: _paymentMethod == 'qrph',
-                        selectedTileColor: Theme.of(context)
-                            .colorScheme
-                            .primary
+                        selectedTileColor: Theme.of(context).colorScheme.primary
                             .withValues(alpha: .06),
                         enabled: AppState.online,
                         onTap: AppState.online
@@ -604,7 +349,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Theme.of(context).dividerColor),
+                            border: Border.all(
+                              color: Theme.of(context).dividerColor,
+                            ),
                           ),
                           child: Image.asset(
                             'assets/images/qrph.png',
@@ -617,7 +364,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         ),
                         title: Text(
                           'QRPh',
-                          style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                          ),
                         ),
                         subtitle: Text(
                           AppState.online
@@ -634,12 +386,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             : AppState.online
                             ? Icon(
                                 Icons.radio_button_unchecked,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                                 size: 19,
                               )
                             : Icon(
                                 Icons.lock_outline,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                                 size: 18,
                               ),
                       ),
@@ -669,7 +425,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               style: TextStyle(
                                 fontSize: 12,
                                 color: _error == null
-                                    ? Theme.of(context).colorScheme.onSurfaceVariant
+                                    ? Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant
                                     : Colors.red,
                               ),
                             ),
@@ -788,7 +546,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
-                border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
+                border: Border(
+                  top: BorderSide(color: Theme.of(context).dividerColor),
+                ),
               ),
               child: SizedBox(
                 height: 48,

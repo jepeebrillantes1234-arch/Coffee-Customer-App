@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../core/api.dart';
 import '../core/animated_add_button.dart';
-import '../core/theme.dart';
 import '../core/util.dart';
 import '../core/widgets.dart';
 import '../state/favorites.dart';
