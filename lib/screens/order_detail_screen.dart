@@ -92,9 +92,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       await Api.I.cancel(widget.id);
       await _load();
     } on ApiException catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.message)));
+      }
     }
   }
 
@@ -111,9 +112,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           .push(MaterialPageRoute(builder: (_) => PaymentScreen(order: fresh)));
       await _load();
     } on ApiException catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.message)));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -124,14 +126,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     try {
       await Api.I.review(widget.id, _rating, _comment.text.trim());
       await _load();
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Thank you for your review!')),
         );
+      }
     } on ApiException catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.message)));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -218,9 +222,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         : rawShopPoint;
     final riderPoint = rider == null ? null : point(rider);
     final points = <LatLng>[
-      if (destinationPoint != null) destinationPoint,
-      if (riderPoint != null) riderPoint,
-      if (shopPoint != null) shopPoint,
+      ?destinationPoint,
+      ?riderPoint,
+      ?shopPoint,
     ];
     final isDelivered = status == 'delivered' || status == 'completed';
     final isOnRoute = status == 'on_the_way' || status == 'picked_up';
@@ -952,8 +956,8 @@ class _LiveRiderMapState extends State<_LiveRiderMap> {
     final destinationPoint = _point(_tracking['destination']);
     final shopPoint = _point(_tracking['shop']);
     final mapPoints = <LatLng>[
-      if (riderPoint != null) riderPoint,
-      if (destinationPoint != null) destinationPoint,
+      ?riderPoint,
+      ?destinationPoint,
       if (shopPoint != null && shopPoint.latitude != 0 && shopPoint.longitude != 0)
         shopPoint,
     ];

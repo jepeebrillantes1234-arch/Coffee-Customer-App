@@ -22,6 +22,21 @@ String fixUrl(String? u) {
       query: uri.hasQuery ? uri.query : null,
       fragment: uri.hasFragment ? uri.fragment : null,
     );
+  } else if (uri.host != base.host &&
+      uri.host.endsWith('.ngrok-free.dev') &&
+      base.host.endsWith('.ngrok-free.dev')) {
+    // Laravel may build storage URLs using an older APP_URL/ngrok hostname.
+    // Keep the uploaded file path, but fetch it from the currently configured
+    // API tunnel so banners and other uploaded images remain reachable.
+    uri = Uri(
+      scheme: base.scheme,
+      userInfo: uri.userInfo,
+      host: base.host,
+      port: base.hasPort ? base.port : null,
+      pathSegments: uri.pathSegments,
+      query: uri.hasQuery ? uri.query : null,
+      fragment: uri.hasFragment ? uri.fragment : null,
+    );
   } else if (uri.scheme == 'http' && uri.host.contains('ngrok')) {
     uri = uri.replace(scheme: 'https');
   }

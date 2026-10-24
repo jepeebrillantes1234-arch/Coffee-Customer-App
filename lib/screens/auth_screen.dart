@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api.dart';
 import '../core/config.dart';
 import '../core/role_home.dart';
-import '../core/theme.dart';
 import 'register_screen.dart';
 import 'customer_service_sheet.dart';
 
@@ -361,8 +360,9 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty)
+                        if (v == null || v.isEmpty) {
                           return 'Please enter your password.';
+                        }
                         return null;
                       },
                     ),
@@ -475,7 +475,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           'assets/images/google.png',
                           width: 22,
                           height: 22,
-                          errorBuilder: (_, __, ___) => const Text(
+                          errorBuilder: (_, _, _) => const Text(
                             'G',
                             style: TextStyle(
                               fontSize: 22,

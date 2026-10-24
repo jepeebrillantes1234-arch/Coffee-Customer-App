@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme.dart';
 import '../state/favorites.dart';
 import 'menu_screen.dart';
 

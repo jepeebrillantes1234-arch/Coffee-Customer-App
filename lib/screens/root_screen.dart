@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
-import '../core/theme.dart';
 import '../core/widgets.dart';
 import '../state/cart.dart';
 import '../state/nav.dart';
@@ -229,7 +228,7 @@ class _CustomerDrawerState extends State<_CustomerDrawer> {
                                 headers: const {
                                   'ngrok-skip-browser-warning': 'true',
                                 },
-                                errorBuilder: (_, __, ___) => ColoredBox(
+                                errorBuilder: (_, _, _) => ColoredBox(
                                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                   child: Icon(
                                     Icons.person_rounded,

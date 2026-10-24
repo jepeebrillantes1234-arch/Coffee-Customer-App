@@ -120,7 +120,7 @@ class _AddressesScreenState extends State<AddressesScreen> {
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 92),
                   itemCount: _items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 6),
+                  separatorBuilder: (_, _) => const SizedBox(height: 6),
                   itemBuilder: (_, index) {
                     final address = _items[index];
                     final lat = dbl(address['latitude']);

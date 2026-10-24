@@ -4,7 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
-import '../screens/order_detail_screen.dart';
+import '../screens/trackorder_screen.dart';
 import '../screens/product_screen.dart';
 import '../screens/promos_screen.dart';
 import 'api.dart';
@@ -211,7 +211,7 @@ class PushNotifications {
     }
     navigator.push(
       MaterialPageRoute<void>(
-        builder: (_) => OrderDetailScreen(id: orderId),
+        builder: (_) => TrackOrderScreen(orderId: orderId),
       ),
     );
   }

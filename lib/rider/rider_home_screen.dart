@@ -354,7 +354,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
           Text(_available ? 'You are online' : 'You are offline', style: TextStyle(color: _available ? Colors.white : null, fontWeight: FontWeight.w800, fontSize: 16)),
           Text(_available ? 'Ready to receive delivery assignments' : 'Turn on availability when you are ready', style: TextStyle(color: _available ? Colors.white70 : Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
         ])),
-        if (_availabilityBusy) const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)) else Switch(value: _available, onChanged: _toggleAvailable, activeColor: Colors.white),
+        if (_availabilityBusy) const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)) else Switch(value: _available, onChanged: _toggleAvailable, activeThumbColor: Colors.white),
       ]),
     ),
   );

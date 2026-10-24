@@ -3,7 +3,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/api.dart';
 import '../core/role_home.dart';
-import '../core/theme.dart';
 import 'auth_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -111,7 +110,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: Image.asset(
                         'assets/images/logo1.png',
                         height: 88,
-                        errorBuilder: (_, __, ___) => Icon(
+                        errorBuilder: (_, _, _) => Icon(
                           Icons.local_cafe_rounded,
                           size: 70,
                           color: Theme.of(context).colorScheme.primary,

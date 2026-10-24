@@ -8,7 +8,7 @@ import '../core/theme.dart';
 import '../core/util.dart';
 import '../core/widgets.dart';
 import 'order_contents_screen.dart';
-import 'order_detail_screen.dart';
+import 'trackorder_screen.dart';
 import 'root_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -145,7 +145,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Future<void> _openOrder(Map<String, dynamic> order) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => OrderDetailScreen(id: order['id'] as int),
+        builder: (_) => TrackOrderScreen(orderId: order['id'] as int),
       ),
     );
     _load(silent: true);

@@ -12,6 +12,9 @@ import 'auth_screen.dart';
 import 'favorites_screen.dart';
 import 'notifications_screen.dart';
 import 'customer_service_sheet.dart';
+import 'membership_screen.dart';
+import 'payment_methods_screen.dart';
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -324,15 +327,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await Api.I.deleteAccount(password.text);
       Cart.I.clear();
       Favorites.I.clear();
-      if (mounted)
+      if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const AuthScreen()),
           (_) => false,
         );
+      }
     } on ApiException catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.message)));
+      }
     } finally {
       password.dispose();
     }
@@ -405,19 +410,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _openPaymentInfo() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Payment methods'),
-        content: const Text(
-          'Choose an available payment method at checkout. Depending on the order, you can pay with Cash on Delivery or GCash.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const PaymentMethodsScreen(),
       ),
     );
   }
@@ -538,6 +533,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           Column(children: [
+            _profileRow(
+              context,
+              Icons.card_membership_rounded,
+              'Membership & Rewards',
+              () => open(const MembershipScreen()),
+            ),
+            const Divider(height: 1, indent: 74),
             _profileRow(
               context,
               Icons.receipt_long_outlined,

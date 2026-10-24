@@ -8,7 +8,7 @@ import '../core/api.dart';
 
 import '../core/theme.dart';  
 import '../core/util.dart';
-import 'order_detail_screen.dart';
+import 'trackorder_screen.dart';
 
 /// QRPh payment. Bubukas ang PayMongo hosted checkout; pagbalik,
 /// awtomatikong titingnan kung bayad na.
@@ -145,7 +145,7 @@ class _PaymentScreenState extends State<PaymentScreen>
           );
           if (!mounted) return;
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => OrderDetailScreen(id: _id)),
+            MaterialPageRoute(builder: (_) => TrackOrderScreen(orderId: _id)),
           );
         }
       } else if (manual) {

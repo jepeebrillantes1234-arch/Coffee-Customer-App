@@ -573,8 +573,46 @@ class Api {
   Future<Map<String, dynamic>> appConfig() async =>
       Map<String, dynamic>.from(_d(await _call('GET', '/app-config')) as Map);
 
+  Future<List<Map<String, dynamic>>> homeBanners() async =>
+      mapList(_d(await _call('GET', '/home-banners', auth: false)));
+
   Future<List<Map<String, dynamic>>> promos() async =>
       mapList(_d(await _call('GET', '/promos', auth: false)));
+
+  // ---------- MEMBERSHIP & LOYALTY ----------
+  Future<Map<String, dynamic>> loyaltySummary() async =>
+      Map<String, dynamic>.from(_d(await _call('GET', '/loyalty')) as Map);
+
+  Future<Map<String, dynamic>> startMembershipCheckout() async =>
+      Map<String, dynamic>.from(
+        _d(await _call('POST', '/membership/checkout')) as Map,
+      );
+
+  Future<Map<String, dynamic>> verifyMembershipPayment() async =>
+      Map<String, dynamic>.from(
+        _d(await _call('POST', '/membership/payment/verify')) as Map,
+      );
+
+  Future<List<Map<String, dynamic>>> rewards() async =>
+      mapList(_d(await _call('GET', '/rewards')));
+
+  Future<Map<String, dynamic>> redeemReward(
+    int rewardId,
+    String idempotencyKey,
+  ) async =>
+      Map<String, dynamic>.from(
+        _d(
+              await _call(
+                'POST',
+                '/rewards/$rewardId/redeem',
+                body: {'idempotency_key': idempotencyKey},
+              ),
+            )
+            as Map,
+      );
+
+  Future<List<Map<String, dynamic>>> rewardRedemptions() async =>
+      mapList(_d(await _call('GET', '/rewards/redemptions')));
 
   // ================= RIDER =================
   Future<Map<String, dynamic>> deliveries() async => Map<String, dynamic>.from(

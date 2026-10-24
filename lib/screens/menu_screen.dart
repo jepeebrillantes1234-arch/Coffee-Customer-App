@@ -54,8 +54,9 @@ class _MenuScreenState extends State<MenuScreen> {
       if (mounted) {
         setState(() {
           _cats = c;
-          if (_cat == null && c.isNotEmpty)
+          if (_cat == null && c.isNotEmpty) {
             _cat = (c.first['id'] as num).toInt();
+          }
         });
       }
     } on ApiException catch (e) {

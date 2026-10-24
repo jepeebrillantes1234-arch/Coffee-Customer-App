@@ -7,7 +7,7 @@ import '../core/util.dart';
 import '../state/cart.dart';
 import '../state/promo_state.dart';
 import '../state/app_state.dart';
-import 'order_detail_screen.dart';
+import 'trackorder_screen.dart';
 import 'addresses_screen.dart';
 import 'payment_screen.dart';
 import 'root_screen.dart';
@@ -133,12 +133,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       Cart.I.clear();
       SelectedPromo.I.clear();
       rootTab.value = 3;
-      nav.popUntil((r) => r.isFirst);
-      nav.push(
+      nav.pushReplacement(
         MaterialPageRoute(
           builder: (_) => order['status'] == 'awaiting_payment'
               ? PaymentScreen(order: order)
-              : OrderDetailScreen(id: order['id'] as int),
+              : TrackOrderScreen(orderId: order['id'] as int),
         ),
       );
     } on ApiException catch (e) {

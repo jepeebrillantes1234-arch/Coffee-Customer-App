@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/api.dart';
 import '../core/realtime.dart';
 import '../core/util.dart';
-import 'order_detail_screen.dart';
+import 'trackorder_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -281,7 +281,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ? null
             : () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => OrderDetailScreen(id: orderId),
+                  builder: (_) => TrackOrderScreen(orderId: orderId),
                 ),
               ),
         child: Container(

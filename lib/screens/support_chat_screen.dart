@@ -187,9 +187,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       _error = null;
     });
     try {
-      if (_conversation == null) {
-        _conversation = await Api.I.startSupportConversation();
-      }
+      _conversation ??= await Api.I.startSupportConversation();
       await Api.I.sendSupportMessage(
         conversationId: _conversationId!,
         body: _message.text,
@@ -199,11 +197,13 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         guestToken: _guestToken,
       );
       _message.clear();
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _attachmentPath = null;
         _attachmentName = null;
         _orderId = null;
       });
+      }
       await _refreshMessages();
       _startRefreshing();
     } on ApiException catch (e) {
@@ -284,7 +284,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           : NetworkImage(imageUrl),
       onBackgroundImageError: imageUrl == null || imageUrl.isEmpty
           ? null
-          : (_, __) {},
+          : (_, _) {},
       child: imageUrl == null || imageUrl.isEmpty
           ? (assistant || name.isEmpty
               ? fallback()
@@ -325,7 +325,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         ),
         if (attachment != null && attachment.isNotEmpty)
           if (mime.startsWith('image/'))
-            GestureDetector(onTap: () => showDialog<void>(context: context, builder: (_) => Dialog(child: InteractiveViewer(child: Image.network(attachment, headers: _attachmentHeaders)))), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(attachment, headers: _attachmentHeaders, width: 230, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Text('Image unavailable'))))
+            GestureDetector(onTap: () => showDialog<void>(context: context, builder: (_) => Dialog(child: InteractiveViewer(child: Image.network(attachment, headers: _attachmentHeaders)))), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(attachment, headers: _attachmentHeaders, width: 230, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Text('Image unavailable'))))
           else
             const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.videocam_outlined, size: 18), SizedBox(width: 5), Text('Video attachment')]),
         if ((item['body']?.toString() ?? '').isNotEmpty) Text(item['body'].toString()),

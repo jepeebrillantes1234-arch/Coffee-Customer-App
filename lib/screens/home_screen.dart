@@ -7,14 +7,13 @@ import '../core/realtime.dart';
 import '../core/animated_add_button.dart';
 import '../core/util.dart';
 import '../core/widgets.dart';
-import '../state/cart.dart';
 import '../state/favorites.dart';
 import '../state/app_state.dart';
 import '../state/nav.dart';
 import 'notifications_screen.dart';
 import 'product_screen.dart';
-import 'promo_carousel.dart';
 import 'promos_screen.dart';
+import 'profile_screen.dart';
 
 const _serif = 'serif';
 
@@ -28,23 +27,30 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _cats = [];
   List<Map<String, dynamic>> _products = [];
-  List<Map<String, dynamic>> _bundles = [];
-  List<Map<String, dynamic>> _promos = [];
+  List<Map<String, dynamic>> _banners = [];
   bool _loading = true;
+  bool _bannerLoading = true;
   String? _error;
+  String? _bannerError;
   int _unread = 0;
+  int _bannerIndex = 0;
+  final PageController _bannerController = PageController();
+  Timer? _bannerTimer;
   StreamSubscription<Map<String, dynamic>>? _liveSubscription;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _scheduleBannerAdvance();
     Favorites.I.load();
     _loadUnread();
     Realtime.I.connect();
     _liveSubscription = Realtime.I.updates.listen((event) {
       if (event['kind'] == 'notification') _loadUnread();
-      if (['product', 'category', 'promo'].contains(event['kind'])) _load();
+      if (['product', 'category', 'promo', 'banner'].contains(event['kind'])) {
+        _load();
+      }
     });
     rootTab.addListener(_onTab);
   }
@@ -52,6 +58,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     rootTab.removeListener(_onTab);
+    _bannerTimer?.cancel();
+    _bannerController.dispose();
     _liveSubscription?.cancel();
     super.dispose();
   }
@@ -70,17 +78,43 @@ class _HomeScreenState extends State<HomeScreen> {
       final cats = await Api.I.categories();
       final prods = await Api.I.products();
       Map<String, dynamic>? cfg;
-      Map<String, dynamic>? homeData;
+      String? bannerError;
+      var banners = <Map<String, dynamic>>[];
       try {
-        homeData = await Api.I.appConfig();
-        cfg = homeData;
+        banners = await Api.I.homeBanners();
       } catch (error) {
-        debugPrint('Home merchandising request failed: $error');
+        debugPrint('Public home banner request failed: $error');
+        bannerError = 'Could not load home banners: $error';
       }
-      List<Map<String, dynamic>> promos = [];
-      try {
-        promos = await Api.I.promos();
-      } catch (_) {}
+
+      // Signed-in customers keep the existing audience filtering and payment config.
+      // Guests still receive the public banners without calling the protected endpoint.
+      if (Api.I.loggedIn) {
+        try {
+          cfg = await Api.I.appConfig();
+          final personalizedBanners = _readBanners(cfg);
+          if (personalizedBanners.isNotEmpty) {
+            banners = personalizedBanners;
+          }
+        } catch (error) {
+          debugPrint('Personalized home config request failed: $error');
+        }
+      }
+
+      if (banners.isNotEmpty) {
+        banners.sort((a, b) {
+          final order = (a['sort_order'] as num?)?.toInt() ?? 0;
+          final otherOrder = (b['sort_order'] as num?)?.toInt() ?? 0;
+          if (order != otherOrder) return order.compareTo(otherOrder);
+          return ((b['id'] as num?)?.toInt() ?? 0).compareTo(
+            (a['id'] as num?)?.toInt() ?? 0,
+          );
+        });
+        bannerError = null;
+        debugPrint('Loaded ${banners.length} home banner(s).');
+      } else {
+        bannerError ??= 'No active home banners were returned by the server.';
+      }
       prods.sort(
         (a, b) => dbl(b['avg_rating']).compareTo(dbl(a['avg_rating'])),
       );
@@ -88,26 +122,85 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _cats = cats;
         _products = prods;
-        _bundles = mapList(homeData?['home_promos'] ?? []);
-        _promos = promos;
-        AppState.online =
-            cfg?['payment_mode'] == 'online' ||
-            (cfg?['settings'] as Map?)?['payment_method'] == 'online';
+        if (banners.isNotEmpty) {
+          _banners = banners;
+          _bannerIndex = 0;
+        }
+        _bannerError = bannerError;
+        _bannerLoading = false;
+        if (cfg != null) {
+          AppState.online =
+              cfg['payment_mode'] == 'online' ||
+              (cfg['settings'] as Map?)?['payment_method'] == 'online';
+        }
         _error = null;
         _loading = false;
       });
+      if (banners.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _bannerController.hasClients) {
+            _bannerController.jumpToPage(0);
+          }
+        });
+        _scheduleBannerAdvance();
+      }
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e.message;
         _loading = false;
+        _bannerLoading = false;
+        _bannerError = 'Could not load home banners: ${e.message}';
+      });
+    } catch (error) {
+      debugPrint('Unexpected home loading error: $error');
+      if (!mounted) return;
+      setState(() {
+        _error = 'Unable to load the Home screen. Pull down to retry.';
+        _loading = false;
+        _bannerLoading = false;
+        _bannerError = 'Unexpected error while loading banners: $error';
       });
     }
   }
 
+  List<Map<String, dynamic>> _readBanners(Map<String, dynamic> config) {
+    dynamic value = config['banners'] ?? config['home_banners'];
+    if (value == null && config['settings'] is Map) {
+      final settings = Map<String, dynamic>.from(config['settings'] as Map);
+      value = settings['banners'] ?? settings['home_banners'];
+    }
+    if (value == null && config['data'] is Map) {
+      final data = Map<String, dynamic>.from(config['data'] as Map);
+      value = data['banners'] ?? data['home_banners'];
+    }
+    if (value is! List) return [];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .where((item) {
+          final active = item['is_active'];
+          return active == null ||
+              active == true ||
+              active == 1 ||
+              active == '1';
+        })
+        .toList();
+  }
+
   // I-refresh ang home data kapag bumalik sa Home
   void _onTab() {
-    if (rootTab.value == 0) _load();
+    if (rootTab.value == 0) {
+      if (_bannerController.hasClients && _bannerIndex != 0) {
+        _bannerController.jumpToPage(0);
+      } else {
+        _bannerIndex = 0;
+      }
+      _scheduleBannerAdvance();
+      _load();
+    } else {
+      _bannerTimer?.cancel();
+    }
   }
 
   // ---------- AKSYON ----------
@@ -122,6 +215,69 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _scheduleBannerAdvance() {
+    _bannerTimer?.cancel();
+    if (_activeBanners.length < 2) return;
+    _bannerTimer = Timer(const Duration(seconds: 5), () {
+      if (!mounted || !_bannerController.hasClients) return;
+      final next = (_bannerIndex + 1) % _activeBanners.length;
+      _bannerController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 550),
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
+  List<Map<String, dynamic>> get _activeBanners =>
+      _banners;
+
+  void _openBannerDestination(Map<String, dynamic> banner) {
+    final type = (banner['banner_type'] ?? banner['type'] ?? 'custom')
+        .toString()
+        .toLowerCase();
+    final destination = (banner['destination'] ?? '').toString().toLowerCase();
+    final target = destination.isNotEmpty
+        ? destination
+        : switch (type) {
+            'order_now' => 'menu',
+            'promo' || 'redeem' => 'promos',
+            'membership' || 'rewards' => 'profile',
+            _ => 'menu',
+          };
+
+    switch (target) {
+      case 'menu':
+      case 'order_now':
+        _goMenu();
+        return;
+      case 'promos':
+      case 'promo':
+      case 'redeem':
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const PromosScreen()),
+        );
+        return;
+      case 'profile':
+      case 'membership':
+      case 'rewards':
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const ProfileScreen()),
+        );
+        return;
+      case 'cart':
+        rootTab.value = 2;
+        return;
+      case 'orders':
+        rootTab.value = 3;
+        return;
+      default:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This banner destination is unavailable.')),
+        );
+    }
+  }
+
   // ---------- UI ----------
   @override
   Widget build(BuildContext context) {
@@ -133,103 +289,11 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: EdgeInsets.zero,
           children: [
             _header(),
-            _promoSection(),
-            if (_bundles.isNotEmpty) _bundleSection(),
             _categories(),
             _recommended(),
             const SizedBox(height: 24),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _promoSection() {
-    final hasPromos = _promos.isNotEmpty;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 14, 0, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 14, bottom: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Promos',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const PromosScreen()),
-                  ),
-                  child: const Text('See All'),
-                ),
-              ],
-            ),
-          ),
-          if (_loading)
-            SizedBox(
-              height: 170,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  for (var i = 0; i < 2; i++)
-                    Container(
-                      width: 290,
-                      margin: const EdgeInsets.only(right: 10),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: const Center(child: CircularProgressIndicator()),
-                    ),
-                ],
-              ),
-            )
-          else if (hasPromos)
-            SizedBox(
-              height: 170,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  for (final promo in _promos)
-                    SizedBox(
-                      width: 290,
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 10),
-                        child: PromoBannerCard(
-                          promo: promo,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const PromosScreen(),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.only(right: 14, bottom: 4),
-              child: Text(
-                'No active promos right now.',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-        ],
       ),
     );
   }
@@ -292,52 +356,234 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.asset('assets/images/home.png', fit: BoxFit.cover),
+            if (_activeBanners.isEmpty)
+              Positioned.fill(child: _emptyBannerState())
+            else
+              PageView.builder(
+                controller: _bannerController,
+                itemCount: _activeBanners.length,
+                onPageChanged: (index) {
+                  setState(() => _bannerIndex = index);
+                  _scheduleBannerAdvance();
+                },
+                itemBuilder: (context, index) => _bannerSlide(index),
+              ),
+            if (_activeBanners.length > 1)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 10,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(_activeBanners.length, (index) {
+                    final selected = index == _bannerIndex;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: selected ? 17 : 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: selected ? Colors.white : Colors.white70,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            if (_activeBanners.isNotEmpty &&
+                (_bannerLoading || _bannerError != null))
+              Positioned(
+                left: 12,
+                right: 12,
+                top: 12,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: Material(
+                    color: Colors.black.withValues(alpha: 0.62),
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: _bannerLoading ? null : _load,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 9,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_bannerLoading)
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            else
+                              const Icon(
+                                Icons.refresh_rounded,
+                                size: 17,
+                                color: Colors.white,
+                              ),
+                            const SizedBox(width: 8),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 250),
+                              child: Text(
+                                _bannerLoading
+                                    ? 'Loading banners...'
+                                    : 'Banners unavailable. Tap to retry.',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyBannerState() {
+    return Container(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_bannerLoading)
+            const CircularProgressIndicator()
+          else
+            Icon(
+              Icons.image_not_supported_outlined,
+              size: 34,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          const SizedBox(height: 12),
+          Text(
+            _bannerLoading
+                ? 'Loading banners...'
+                : _bannerError ?? 'No active banners are available.',
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (!_bannerLoading) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _load,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _bannerSlide(int index) {
+    final banner = _activeBanners[index];
+    final type = (banner['banner_type'] ?? banner['type'] ?? 'custom')
+        .toString()
+        .toLowerCase();
+    final title = (banner['title'] ?? '').toString().trim();
+    final headline = (banner['headline'] ?? '').toString().trim();
+    final description = (banner['description'] ?? banner['subtitle'] ?? '')
+        .toString()
+        .trim();
+    final imageUrl = (banner['image_url'] ?? '').toString().trim();
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openBannerDestination(banner),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (imageUrl.isNotEmpty)
+              NetImage(imageUrl, fit: BoxFit.cover)
+            else
+              ColoredBox(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              ),
             const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
-                  colors: [Color(0x99000000), Color(0x00000000)],
+                  colors: [Color(0xCC160C08), Color(0x66000000), Color(0x00000000)],
                 ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Good Coffee,\nBetter Days',
-                    style: TextStyle(
+                  if (title.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 5),
+                      child: Text(
+                        title.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+                  Text(
+                    headline.isEmpty ? title : headline,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 25,
                       height: 1.08,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Freshly brewed for every moment.',
-                    style: TextStyle(color: Colors.white, fontSize: 12),
-                  ),
+                  if (description.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ],
                   const SizedBox(height: 14),
-                  FilledButton(
-                    onPressed: () => _goMenu(),
+                  FilledButton.icon(
+                    onPressed: () => _openBannerDestination(banner),
+                    icon: Icon(_bannerIcon(type), size: 17),
+                    label: Text(title.isEmpty ? 'Explore' : title),
                     style: FilledButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.surface,
                       foregroundColor: Theme.of(context).colorScheme.onSurface,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 9,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text(
-                      'Order Now ',
-                      style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
                 ],
@@ -348,6 +594,15 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  IconData _bannerIcon(String type) => switch (type) {
+    'order_now' => Icons.coffee_rounded,
+    'promo' => Icons.local_offer_rounded,
+    'membership' => Icons.card_membership_rounded,
+    'redeem' => Icons.redeem_rounded,
+    'rewards' => Icons.stars_rounded,
+    _ => Icons.arrow_forward_rounded,
+  };
 
   Widget _categories() {
     String emoji(String n) {
@@ -580,131 +835,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  Widget _bundleSection() => _horizontalSection(
-    'Bundle Deals',
-    _bundles.map((bundle) {
-      final name = bundle['name']?.toString() ?? 'Bundle';
-      final products = mapList(bundle['products'])
-          .map((item) => "${item['name']} x ${item['quantity']}")
-          .join(' · ');
-      final price = peso(dbl(bundle['price']));
-      final savings = peso(dbl(bundle['savings']));
-
-      return SizedBox(
-        width: 270,
-        child: Card(
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                height: 120,
-                width: double.infinity,
-                child: NetImage(bundle['image_url']?.toString()),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    Text(
-                      products,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '$price · Save $savings',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            Cart.I.addBundle(bundle);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Bundle added to cart'),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.add_shopping_cart),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }).toList(),
-  );
-  Widget _productSection(
-    String title,
-    List<Map<String, dynamic>> products, {
-    bool bestSeller = false,
-  }) => _horizontalSection(
-    title,
-    products
-        .map(
-          (product) => SizedBox(
-            width: 170,
-            child: _miniCard(product, bestSeller: bestSeller),
-          ),
-        )
-        .toList(),
-  );
-
-  Widget _horizontalSection(String title, List<Widget> children) => Padding(
-    padding: const EdgeInsets.fromLTRB(14, 14, 0, 0),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(right: 14, bottom: 8),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-        ),
-        SizedBox(
-          height: 245,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              for (final child in children)
-                Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: child,
-                ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
 
   Widget _miniCard(Map<String, dynamic> p, {bool bestSeller = false}) {
     final rating = dbl(p['avg_rating']);

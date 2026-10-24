@@ -66,7 +66,11 @@ class Cart extends ChangeNotifier {
     }
     notifyListeners();
   }
-  void setBundleQty(int index, int qty) { if(qty<=0) bundles.removeAt(index); else bundles[index].qty=qty; notifyListeners(); }
+  void setBundleQty(int index, int qty) { if(qty<=0) {
+    bundles.removeAt(index);
+  } else {
+    bundles[index].qty=qty;
+  } notifyListeners(); }
 
   void add(CartLine line) {
     final i = lines.indexWhere((l) => l.key == line.key);
