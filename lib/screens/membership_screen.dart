@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -7,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
 import '../core/widgets.dart';
+import 'redeem_points_screen.dart';
 
 class MembershipScreen extends StatefulWidget {
   const MembershipScreen({super.key});
@@ -26,6 +26,8 @@ class _MembershipScreenState extends State<MembershipScreen>
   bool _busy = false;
   bool _verifying = false;
   String? _error;
+  String? _cardDesignUrl;
+  String? _cardBackDesignUrl;
   late final AnimationController _cardFlipController;
 
   bool get _active => _membership?['active'] == true;
@@ -71,6 +73,10 @@ class _MembershipScreenState extends State<MembershipScreen>
         _membership = summary['membership'] is Map
             ? Map<String, dynamic>.from(summary['membership'] as Map)
             : null;
+        _cardDesignUrl = (summary['card_design_front_url'] ??
+                summary['card_design_url'])
+            ?.toString();
+        _cardBackDesignUrl = summary['card_design_back_url']?.toString();
         _transactions = (summary['transactions'] as List? ?? [])
             .whereType<Map>()
             .map((item) => Map<String, dynamic>.from(item))
@@ -135,6 +141,10 @@ class _MembershipScreenState extends State<MembershipScreen>
         _membership = summary['membership'] is Map
             ? Map<String, dynamic>.from(summary['membership'] as Map)
             : null;
+        _cardDesignUrl = (summary['card_design_front_url'] ??
+                summary['card_design_url'])
+            ?.toString();
+        _cardBackDesignUrl = summary['card_design_back_url']?.toString();
         _transactions = (summary['transactions'] as List? ?? [])
             .whereType<Map>()
             .map((item) => Map<String, dynamic>.from(item))
@@ -157,51 +167,16 @@ class _MembershipScreenState extends State<MembershipScreen>
         _membership = summary['membership'] is Map
             ? Map<String, dynamic>.from(summary['membership'] as Map)
             : null;
+        _cardDesignUrl = (summary['card_design_front_url'] ??
+                summary['card_design_url'])
+            ?.toString();
+        _cardBackDesignUrl = summary['card_design_back_url']?.toString();
         _transactions = (summary['transactions'] as List? ?? [])
             .whereType<Map>()
             .map((item) => Map<String, dynamic>.from(item))
             .toList();
       });
     } catch (_) {}
-  }
-
-  Future<void> _redeem(Map<String, dynamic> reward) async {
-    final name = reward['name']?.toString() ?? 'this reward';
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Redeem reward?'),
-        content: Text('Use ${reward['points_cost']} points for $name?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Redeem'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    setState(() => _busy = true);
-    try {
-      final key = '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
-      final result = await Api.I.redeemReward(
-        (reward['id'] as num).toInt(),
-        key,
-      );
-      final redemption = Map<String, dynamic>.from(result);
-      await _load();
-      if (mounted) await _showRedemption(redemption);
-    } on ApiException catch (error) {
-      _message(error.message);
-    } catch (error) {
-      _message('Could not redeem this reward: $error');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
   Future<void> _showRedemption(Map<String, dynamic> redemption) async {
@@ -292,10 +267,30 @@ class _MembershipScreenState extends State<MembershipScreen>
                     ],
                   ),
                   const SizedBox(height: 22),
-                  _sectionTitle('Available rewards'),
-                  if (_rewards.isEmpty)
-                    const _EmptyNotice('No rewards are available right now.'),
-                  for (final reward in _rewards) _rewardCard(reward),
+                  _sectionTitle('Redeem points'),
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.redeem_rounded),
+                      title: const Text('Browse redeemable products'),
+                      subtitle: Text(
+                        '${_rewards.where((reward) => reward['reward_type'] == 'free_product').length} products available · $_points points',
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const RedeemPointsScreen(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_rewards.any((reward) => reward['reward_type'] != 'free_product')) ...[
+                    const SizedBox(height: 16),
+                    _sectionTitle('Other rewards'),
+                    for (final reward in _rewards.where(
+                      (reward) => reward['reward_type'] != 'free_product',
+                    ))
+                      _rewardCard(reward),
+                  ],
                   const SizedBox(height: 22),
                   _sectionTitle('Redemption history'),
                   if (_redemptions.isEmpty)
@@ -342,7 +337,8 @@ class _MembershipScreenState extends State<MembershipScreen>
                 return LayoutBuilder(
                   builder: (context, constraints) {
                     final width = constraints.maxWidth;
-                    final height = width / (1024 / 450);
+                    // Match the bundled front artwork so neither side is stretched.
+                    final height = width / (1832 / 858);
                     return SizedBox(
                       width: width,
                       height: height,
@@ -446,11 +442,7 @@ class _MembershipScreenState extends State<MembershipScreen>
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.asset(
-          'assets/images/card.png',
-          fit: BoxFit.fill,
-          errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFF3B1E12)),
-        ),
+        _cardBackground(),
         // Cover the artwork's decorative tier text with the real membership state.
         Positioned(
           left: width * .65,
@@ -573,11 +565,44 @@ class _MembershipScreenState extends State<MembershipScreen>
     );
   }
 
-  Widget _membershipCardBack() => Image.asset(
+  Widget _cardBackground() {
+    return _cardDesignImage(_cardDesignUrl, 'assets/images/card.png');
+  }
+
+  Widget _membershipCardBack() => _cardDesignImage(
+    _cardBackDesignUrl,
     'assets/images/card1.png',
-    fit: BoxFit.fill,
-    errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFFF3E4C8)),
   );
+
+  Widget _cardDesignImage(String? imageUrl, String fallbackAsset) {
+    final fallback = Image.asset(
+      fallbackAsset,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => const ColoredBox(
+        color: Color(0xFFF3E4C8),
+        child: Center(child: Icon(Icons.credit_card_rounded, size: 48)),
+      ),
+    );
+    final url = imageUrl?.trim();
+    if (url == null || url.isEmpty) return fallback;
+
+    return Image.network(
+      fixUrl(url),
+      fit: BoxFit.cover,
+      headers: const {'ngrok-skip-browser-warning': 'true'},
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            fallback,
+            const Center(child: CircularProgressIndicator()),
+          ],
+        );
+      },
+      errorBuilder: (_, _, _) => fallback,
+    );
+  }
 
   String _formatMemberSince(dynamic value) {
     final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
@@ -605,22 +630,85 @@ class _MembershipScreenState extends State<MembershipScreen>
     child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
   );
 
+  Future<void> _redeem(Map<String, dynamic> reward) async {
+    final cost = (reward['points_cost'] as num?)?.toInt() ?? 0;
+    if (!_active || _points < cost) {
+      _message('An active membership with at least $cost points is required.');
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Redeem reward?'),
+        content: Text('Use $cost points for ${reward['name'] ?? 'this reward'}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Redeem')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final key = '${DateTime.now().microsecondsSinceEpoch}-${DateTime.now().millisecondsSinceEpoch}';
+      final result = await Api.I.redeemReward((reward['id'] as num).toInt(), key);
+      await _load();
+      if (mounted) {
+        await _showRedemption(
+          result['redemption'] is Map
+              ? Map<String, dynamic>.from(result['redemption'] as Map)
+              : result,
+        );
+      }
+    } on ApiException catch (error) {
+      _message(error.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Widget _rewardCard(Map<String, dynamic> reward) {
     final cost = (reward['points_cost'] as num?)?.toInt() ?? 0;
     final available = _active && _points >= cost && !_busy;
+    final product = reward['product'];
+    final image = reward['image_url']?.toString();
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       clipBehavior: Clip.antiAlias,
-      child: Row(children: [
-        SizedBox(width: 92, height: 100, child: (reward['image_url'] ?? '').toString().isNotEmpty ? NetImage(reward['image_url']?.toString()) : const Icon(Icons.card_giftcard_rounded, size: 40)),
-        Expanded(child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${reward['name'] ?? 'Reward'}', style: const TextStyle(fontWeight: FontWeight.w800)),
-          if ((reward['description'] ?? '').toString().isNotEmpty) Text('${reward['description']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
-          const SizedBox(height: 4),
-          Text('$cost points', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
-        ]))),
-        Padding(padding: const EdgeInsets.only(right: 10), child: FilledButton(onPressed: available ? () => _redeem(reward) : null, child: const Text('Redeem'))),
-      ]),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 88,
+            height: 96,
+            child: image == null || image.isEmpty
+                ? const Icon(Icons.card_giftcard_rounded, size: 40)
+                : NetImage(fixUrl(image)),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${reward['name'] ?? 'Reward'}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                  if ((reward['description'] ?? '').toString().isNotEmpty)
+                    Text('${reward['description']}', maxLines: 2, overflow: TextOverflow.ellipsis),
+                  Text('$cost points', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
+                  if (product is Map && product['name'] != null)
+                    Text('For ${product['name']}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
+          Padding(    
+            padding: const EdgeInsets.only(right: 10),
+            child: FilledButton(
+              onPressed: available ? () => _redeem(reward) : null,
+              child: const Text('Redeem'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

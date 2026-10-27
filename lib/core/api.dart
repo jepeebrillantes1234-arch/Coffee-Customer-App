@@ -598,18 +598,43 @@ class Api {
 
   Future<Map<String, dynamic>> redeemReward(
     int rewardId,
-    String idempotencyKey,
-  ) async =>
-      Map<String, dynamic>.from(
-        _d(
-              await _call(
-                'POST',
-                '/rewards/$rewardId/redeem',
-                body: {'idempotency_key': idempotencyKey},
-              ),
-            )
-            as Map,
-      );
+    String idempotencyKey, {
+    String fulfillmentType = 'pickup',
+    int? addressId,
+  }) async {
+    final response = await _call(
+      'POST',
+      '/rewards/$rewardId/redeem',
+      body: {
+        'idempotency_key': idempotencyKey,
+        'fulfillment_type': fulfillmentType,
+        'address_id': addressId,
+      },
+    );
+    return Map<String, dynamic>.from(_d(response) as Map);
+  }
+
+  Future<Map<String, dynamic>> rewardDeliveryQuote(
+    int rewardId,
+    int addressId,
+  ) async {
+    final response = await _call(
+      'POST',
+      '/rewards/$rewardId/delivery-quote',
+      body: {'address_id': addressId},
+    );
+    return Map<String, dynamic>.from(_d(response) as Map);
+  }
+
+  Future<Map<String, dynamic>> cancelRewardRedemption(
+    int redemptionId,
+  ) async {
+    final response = await _call(
+      'POST',
+      '/rewards/redemptions/$redemptionId/cancel',
+    );
+    return Map<String, dynamic>.from(_d(response) as Map);
+  }
 
   Future<List<Map<String, dynamic>>> rewardRedemptions() async =>
       mapList(_d(await _call('GET', '/rewards/redemptions')));
