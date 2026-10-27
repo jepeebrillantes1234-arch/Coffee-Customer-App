@@ -65,8 +65,9 @@ class _PaymentScreenState extends State<PaymentScreen>
   }
 
   void _snack(String m) {
-    if (mounted)
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+    }
   }
 
   Future<void> _openCheckout() async {
@@ -108,7 +109,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   }
 
   Future<void> _verify({bool manual = false}) async {
-    if (_checking || _done) return;
+    if (_checking || _done || _busy) return;
     _checking = true;
     try {
       final o = await Api.I.verifyPayment(_id);
@@ -161,30 +162,71 @@ class _PaymentScreenState extends State<PaymentScreen>
   }
 
   Future<void> _cancel() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cancel this order?'),
-        content: const Text('You have not been charged.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep order'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Yes, cancel'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    if (_busy || _done) return;
+    final reasonController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    String? reason;
     try {
-      await Api.I.cancel(_id);
+      reason = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cancel this order?'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('You have not been charged.'),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: reasonController,
+                  minLines: 2,
+                  maxLines: 4,
+                  maxLength: 255,
+                  decoration: const InputDecoration(
+                    labelText: 'Cancellation reason',
+                    hintText: 'Tell us why you need to cancel',
+                    alignLabelWithHint: true,
+                  ),
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? 'Please enter a reason for cancellation.'
+                      : null,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Keep order'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.pop(ctx, reasonController.text.trim());
+                }
+              },
+              child: const Text('Yes, cancel'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      reasonController.dispose();
+    }
+    if (reason == null || reason.isEmpty || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await Api.I.cancel(_id, reason: reason);
       _done = true;
+      _poll?.cancel();
+      _tick?.cancel();
       if (mounted) Navigator.of(context).pop();
     } on ApiException catch (e) {
       _snack(e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 

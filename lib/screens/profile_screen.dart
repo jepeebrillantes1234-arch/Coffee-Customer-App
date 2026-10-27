@@ -420,9 +420,104 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _logout() async {
-    Cart.I.clear();
-    Favorites.I.clear();
-    await Api.I.logout();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        var loggingOut = false;
+        return StatefulBuilder(
+          builder: (ctx, dialogSetState) => PopScope<bool>(
+            canPop: !loggingOut,
+            child: Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 58,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.secondaryContainer,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.logout_rounded,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 27,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Log out?',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Are you sure you want to logout? You will need to log in again to access your account.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: loggingOut
+                            ? null
+                            : () async {
+                                dialogSetState(() => loggingOut = true);
+                                await Api.I.logout();
+                                Cart.I.clear();
+                                Favorites.I.clear();
+                                if (ctx.mounted) Navigator.pop(ctx, true);
+                              },
+                        icon: loggingOut
+                            ? const SizedBox.square(
+                                dimension: 17,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.logout_rounded),
+                        label: Text(
+                          loggingOut ? 'Logging out…' : 'Yes, Logout',
+                        ),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: loggingOut
+                            ? null
+                            : () => Navigator.pop(ctx, false),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                        child: const Text('Stay Logged In'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    if (confirmed != true) return;
     rootTab.value = 0;
     if (mounted) {
       Navigator.of(context).pushAndRemoveUntil(

@@ -407,8 +407,11 @@ class Api {
         _d(await _call('GET', '/orders/$id/tracking')) as Map,
       );
 
-  Future<void> cancel(int id) async {
-    await _call('POST', '/orders/$id/cancel');
+  Future<Map<String, dynamic>> cancel(int id, {required String reason}) async {
+    return Map<String, dynamic>.from(
+      _d(await _call('POST', '/orders/$id/cancel', body: {'reason': reason}))
+          as Map,
+    );
   }
 
   Future<void> deleteOrder(int id) async {

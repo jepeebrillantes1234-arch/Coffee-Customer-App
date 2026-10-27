@@ -71,31 +71,114 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _cancel() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cancel this order?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('No'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Yes, cancel'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
+    if (_busy || _o?['can_cancel'] != true) return;
+    final reasonController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    String? reason;
     try {
-      await Api.I.cancel(widget.id);
+      reason = await showDialog<String>(
+        context: context,
+        builder: (ctx) => Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 58,
+                        height: 58,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.errorContainer,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.free_cancellation_rounded, color: Theme.of(context).colorScheme.error, size: 29),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Cancel this order?', textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 8),
+                    Text('Are you sure you want to cancel this order?', textAlign: TextAlign.center,
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: reasonController,
+                      minLines: 3,
+                      maxLines: 5,
+                      maxLength: 255,
+                      textCapitalization: TextCapitalization.sentences,
+                      textInputAction: TextInputAction.newline,
+                      decoration: const InputDecoration(
+                        labelText: 'Cancellation reason',
+                        hintText: 'Tell us why you need to cancel',
+                        alignLabelWithHint: true,
+                        prefixIcon: Padding(
+                          padding: EdgeInsets.only(bottom: 42),
+                          child: Icon(Icons.chat_bubble_outline_rounded),
+                        ),
+                      ),
+                      validator: (value) => value == null || value.trim().isEmpty
+                          ? 'Please enter a reason for cancellation.' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: () {
+                        if (formKey.currentState?.validate() ?? false) {
+                          Navigator.pop(ctx, reasonController.text.trim());
+                        }
+                      },
+                      icon: const Icon(Icons.cancel_outlined),
+                      label: const Text('Yes, Cancel Order'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.error,
+                        foregroundColor: Theme.of(context).colorScheme.onError,
+                        minimumSize: const Size.fromHeight(50),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      child: const Text('Keep My Order'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    } finally {
+      reasonController.dispose();
+    }
+    if (reason == null || reason.isEmpty || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await Api.I.cancel(widget.id, reason: reason);
       await _load();
-    } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Your order has been cancelled successfully.')),
+        );
       }
+    } on ApiException catch (e) {
+      final noLongerCancellable = e.message.toLowerCase().contains('can no longer be cancelled');
+      if (noLongerCancellable) await _load();
+      if (!mounted) return;
+      final message = noLongerCancellable
+          ? 'This order can no longer be cancelled because it has already progressed.'
+          : e.message;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -672,9 +755,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               minimumSize: const Size.fromHeight(48),
               foregroundColor: Colors.red,
             ),
-            onPressed: _cancel,
-            icon: const Icon(Icons.cancel_outlined),
-            label: const Text('Cancel order'),
+            onPressed: _busy ? null : _cancel,
+            icon: _busy
+                ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.cancel_outlined),
+            label: Text(_busy ? 'Cancelling…' : 'Cancel order'),
           ),
         if ((status == 'delivered' || status == 'completed') &&
             o['has_review'] != true)
