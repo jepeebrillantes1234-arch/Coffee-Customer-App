@@ -8,6 +8,7 @@ import '../core/config.dart';
 import '../core/role_home.dart';
 import 'register_screen.dart';
 import 'customer_service_sheet.dart';
+import 'forgot_password_screen.dart';
 
 final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 Future<void>? _googleSignInInitialization;
@@ -68,91 +69,13 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _forgot() async {
-    final emailController = TextEditingController(
-      text: _email.text.contains('@') ? _email.text.trim() : '',
-    );
-    var sending = false;
-    String? error;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, dialogSetState) => AlertDialog(
-          title: const Text('Reset your password'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Enter your account email and we will send a password reset link.',
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email address',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              if (error != null) ...[
-                const SizedBox(height: 8),
-                Text(error!, style: const TextStyle(color: Colors.red)),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: sending ? null : () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: sending
-                  ? null
-                  : () async {
-                      final email = emailController.text.trim();
-                      if (!email.contains('@')) {
-                        dialogSetState(
-                          () => error = 'Enter a valid email address.',
-                        );
-                        return;
-                      }
-                      dialogSetState(() {
-                        sending = true;
-                        error = null;
-                      });
-                      try {
-                        await Api.I.forgotPassword(email);
-                        if (!mounted || !ctx.mounted) return;
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'If that email is registered, a reset link has been sent.',
-                            ),
-                          ),
-                        );
-                      } on ApiException catch (e) {
-                        if (ctx.mounted) {
-                          dialogSetState(() {
-                            sending = false;
-                            error = e.message;
-                          });
-                        }
-                      }
-                    },
-              child: sending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Send reset link'),
-            ),
-          ],
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => ForgotPasswordScreen(
+          initialEmail: _email.text.contains('@') ? _email.text.trim() : '',
         ),
       ),
     );
-    emailController.dispose();
   }
 
   Future<void> _signInWithGoogle() async {
@@ -180,14 +103,14 @@ class _AuthScreenState extends State<AuthScreen> {
         throw ApiException('Google did not return a sign-in token.');
       }
 
-      final credential = GoogleAuthProvider.credential(
-        idToken: googleIdToken,
-      );
+      final credential = GoogleAuthProvider.credential(idToken: googleIdToken);
       final firebaseCredential = await FirebaseAuth.instance
           .signInWithCredential(credential);
       final firebaseUser = firebaseCredential.user;
       if (firebaseUser == null) {
-        throw ApiException('Firebase could not authenticate this Google account.');
+        throw ApiException(
+          'Firebase could not authenticate this Google account.',
+        );
       }
       final firebaseIdToken = await firebaseUser.getIdToken(true);
       if (firebaseIdToken == null || firebaseIdToken.isEmpty) {
@@ -208,13 +131,11 @@ class _AuthScreenState extends State<AuthScreen> {
       debugPrintStack(stackTrace: stackTrace);
       final message = switch (e.code) {
         GoogleSignInExceptionCode.canceled => 'Google sign-in was canceled.',
-        GoogleSignInExceptionCode.clientConfigurationError =>
-          'Google sign-in configuration is incorrect. Check that the Firebase Android package name and SHA-1 match this app.',
-        GoogleSignInExceptionCode.providerConfigurationError =>
-          'Google sign-in is not configured or enabled in Firebase Authentication.',
+        GoogleSignInExceptionCode.clientConfigurationError => 'Google sign-in configuration is incorrect. Check that the Firebase Android package name and SHA-1 match this app.',
+        GoogleSignInExceptionCode.providerConfigurationError => 'Google sign-in is not configured or enabled in Firebase Authentication.',
         _ =>
           'Google sign-in failed (${e.code.name}): '
-          '${e.description ?? 'Please try again.'}',
+              '${e.description ?? 'Please try again.'}',
       };
       if (mounted) setState(() => _error = message);
     } on FirebaseAuthException catch (e, stackTrace) {
@@ -246,7 +167,9 @@ class _AuthScreenState extends State<AuthScreen> {
   InputDecoration _dec(String hint, IconData icon, {Widget? suffix}) =>
       InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        hintStyle: TextStyle(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
         prefixIcon: Icon(icon, color: Theme.of(context).colorScheme.primary),
         suffixIcon: suffix,
         filled: true,
@@ -322,7 +245,9 @@ class _AuthScreenState extends State<AuthScreen> {
                     const SizedBox(height: 4),
                     Text(
                       'Log in to continue your coffee journey.',
-                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                     const SizedBox(height: 22),
 
@@ -369,53 +294,62 @@ class _AuthScreenState extends State<AuthScreen> {
 
                     // ---------- REMEMBER ME / FORGOT ----------
                     Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 28,
-                              height: 28,
-                              child: Checkbox(
-                                value: _remember,
-                                activeColor: Theme.of(context).colorScheme.primary,
-                                visualDensity: VisualDensity.compact,
-                                onChanged: (v) =>
-                                    setState(() => _remember = v ?? true),
-                              ),
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: Checkbox(
+                              value: _remember,
+                              activeColor: Theme.of(context)
+                                  .colorScheme
+                                  .primary,
+                              visualDensity: VisualDensity.compact,
+                              onChanged: (v) =>
+                                  setState(() => _remember = v ?? true),
                             ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Remember me',
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Remember me',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: _forgot,
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(0, 32),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              'Forgot password?',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                               ),
                             ),
-                            const Spacer(),
-                            TextButton(
-                              onPressed: _forgot,
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                minimumSize: const Size(0, 32),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: Text(
-                                'Forgot password?',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
+                    ),
 
                     Align(
                       alignment: Alignment.center,
                       child: TextButton.icon(
                         onPressed: () => showCustomerServiceSheet(context),
-                        icon: const Icon(Icons.support_agent_outlined, size: 19),
+                        icon: const Icon(
+                          Icons.support_agent_outlined,
+                          size: 19,
+                        ),
                         label: const Text('Contact Customer Service'),
                       ),
                     ),
@@ -455,37 +389,41 @@ class _AuthScreenState extends State<AuthScreen> {
 
                     // ---------- GOOGLE SIGN-IN ----------
                     const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(child: Divider()),
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              'or',
-                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                            ),
-                          ),
-                          Expanded(child: Divider()),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _socialButton(
-                        label: 'Continue with Google',
-                        icon: Image.asset(
-                          'assets/images/google.png',
-                          width: 22,
-                          height: 22,
-                          errorBuilder: (_, _, _) => const Text(
-                            'G',
+                    Row(
+                      children: [
+                        Expanded(child: Divider()),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            'or',
                             style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF4285F4),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                             ),
                           ),
                         ),
-                        onTap: _busy ? () {} : _signInWithGoogle,
+                        Expanded(child: Divider()),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _socialButton(
+                      label: 'Continue with Google',
+                      icon: Image.asset(
+                        'assets/images/google.png',
+                        width: 22,
+                        height: 22,
+                        errorBuilder: (_, _, _) => const Text(
+                          'G',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF4285F4),
+                          ),
+                        ),
                       ),
+                      onTap: _busy ? () {} : _signInWithGoogle,
+                    ),
 
                     // ---------- OPEN REGISTRATION ----------
                     const SizedBox(height: 22),
@@ -494,16 +432,20 @@ class _AuthScreenState extends State<AuthScreen> {
                       children: [
                         Text(
                           "Don't have an account?",
-                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          style: TextStyle(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                          ),
                         ),
                         TextButton(
                           onPressed: _busy
                               ? null
                               : () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const RegisterScreen(),
-                                    ),
+                                  MaterialPageRoute(
+                                    builder: (_) => const RegisterScreen(),
                                   ),
+                                ),
                           child: Text(
                             'Sign up',
                             style: TextStyle(
@@ -544,7 +486,7 @@ class _AuthScreenState extends State<AuthScreen> {
           const SizedBox(width: 12),
           Text(
             label,
-          style: TextStyle(
+            style: TextStyle(
               color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w500,
             ),

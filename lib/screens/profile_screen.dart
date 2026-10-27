@@ -103,89 +103,263 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final next = TextEditingController();
     final confirm = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    final accepted = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Change password'),
-        content: Form(
-          key: formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: current,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Current password',
-                  ),
-                  validator: (value) => (value == null || value.isEmpty)
-                      ? 'Enter your current password'
-                      : null,
+    try {
+      final updated = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          var saving = false;
+          var hideCurrent = true;
+          var hideNext = true;
+          var hideConfirm = true;
+          String? serverError;
+          return StatefulBuilder(
+            builder: (ctx, dialogSetState) => Dialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 24,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: 460,
+                  maxHeight: 680,
                 ),
-                TextFormField(
-                  controller: next,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'New password',
-                    helperText: 'Use at least 8 characters',
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .secondaryContainer,
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                              child: Icon(
+                                Icons.lock_reset_rounded,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 13),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Change password',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 3),
+                                  Text(
+                                    'Choose a strong password for your account.',
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Close',
+                              onPressed: saving
+                                  ? null
+                                  : () => Navigator.pop(ctx, false),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 22),
+                        _passwordInput(
+                          controller: current,
+                          label: 'Current password',
+                          hidden: hideCurrent,
+                          onToggle: () =>
+                              dialogSetState(() => hideCurrent = !hideCurrent),
+                          validator: (value) => value == null || value.isEmpty
+                              ? 'Enter your current password.'
+                              : null,
+                        ),
+                        const SizedBox(height: 15),
+                        _passwordInput(
+                          controller: next,
+                          label: 'New password',
+                          helper: 'Use at least 8 characters.',
+                          hidden: hideNext,
+                          onToggle: () =>
+                              dialogSetState(() => hideNext = !hideNext),
+                          validator: (value) {
+                            if (value == null || value.length < 8) {
+                              return 'Use at least 8 characters.';
+                            }
+                            if (value == current.text) {
+                              return 'Choose a password different from your current one.';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 15),
+                        _passwordInput(
+                          controller: confirm,
+                          label: 'Confirm new password',
+                          hidden: hideConfirm,
+                          onToggle: () =>
+                              dialogSetState(() => hideConfirm = !hideConfirm),
+                          validator: (value) => value != next.text
+                              ? 'The passwords do not match.'
+                              : null,
+                        ),
+                        if (serverError != null) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .errorContainer,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              serverError!,
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onErrorContainer,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 22),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: saving
+                                    ? null
+                                    : () => Navigator.pop(ctx, false),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(50),
+                                ),
+                                child: const Text('Cancel'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: FilledButton.icon(
+                                onPressed: saving
+                                    ? null
+                                    : () async {
+                                        if (!(formKey.currentState
+                                                ?.validate() ??
+                                            false)) {
+                                          return;
+                                        }
+                                        dialogSetState(() {
+                                          saving = true;
+                                          serverError = null;
+                                        });
+                                        try {
+                                          await Api.I.changePassword(
+                                            currentPassword: current.text,
+                                            password: next.text,
+                                            passwordConfirmation: confirm.text,
+                                          );
+                                          if (ctx.mounted) {
+                                            Navigator.pop(ctx, true);
+                                          }
+                                        } on ApiException catch (error) {
+                                          if (ctx.mounted) {
+                                            dialogSetState(() {
+                                              saving = false;
+                                              serverError = error.message;
+                                            });
+                                          }
+                                        } catch (_) {
+                                          if (ctx.mounted) {
+                                            dialogSetState(() {
+                                              saving = false;
+                                              serverError = 'Could not update your password. Please try again.';
+                                            });
+                                          }
+                                        }
+                                      },
+                                icon: saving
+                                    ? const SizedBox.square(
+                                        dimension: 17,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.check_rounded),
+                                label: Text(
+                                  saving ? 'Updating…' : 'Update password',
+                                ),
+                                style: FilledButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(50),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  validator: (value) => (value == null || value.length < 8)
-                      ? 'Password must be at least 8 characters'
-                      : null,
                 ),
-                TextFormField(
-                  controller: confirm,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Confirm new password',
-                  ),
-                  validator: (value) =>
-                      value != next.text ? 'Passwords do not match' : null,
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState?.validate() ?? false) {
-                Navigator.pop(ctx, true);
-              }
-            },
-            child: const Text('Update password'),
-          ),
-        ],
-      ),
-    );
-    if (accepted == true) {
-      try {
-        await Api.I.changePassword(
-          currentPassword: current.text,
-          password: next.text,
-          passwordConfirmation: confirm.text,
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Password updated successfully.')),
           );
-        }
-      } on ApiException catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(e.message)));
-        }
+        },
+      );
+      if (updated == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Password updated successfully.')),
+        );
       }
+    } finally {
+      current.dispose();
+      next.dispose();
+      confirm.dispose();
     }
-    current.dispose();
-    next.dispose();
-    confirm.dispose();
   }
+
+  Widget _passwordInput({
+    required TextEditingController controller,
+    required String label,
+    required bool hidden,
+    required VoidCallback onToggle,
+    required String? Function(String?) validator,
+    String? helper,
+  }) => TextFormField(
+    controller: controller,
+    obscureText: hidden,
+    enableSuggestions: false,
+    autocorrect: false,
+    textInputAction: TextInputAction.next,
+    decoration: InputDecoration(
+      labelText: label,
+      helperText: helper,
+      prefixIcon: const Icon(Icons.lock_outline_rounded),
+      suffixIcon: IconButton(
+        tooltip: hidden ? 'Show password' : 'Hide password',
+        onPressed: onToggle,
+        icon: Icon(
+          hidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+        ),
+      ),
+    ),
+    validator: validator,
+  );
 
   Future<void> _deleteAccount() async {
     final password = TextEditingController();
