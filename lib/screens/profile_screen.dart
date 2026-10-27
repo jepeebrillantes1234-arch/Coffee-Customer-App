@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../core/api.dart';
 import '../core/theme.dart';
@@ -12,6 +11,7 @@ import 'auth_screen.dart';
 import 'favorites_screen.dart';
 import 'notifications_screen.dart';
 import 'customer_service_sheet.dart';
+import 'edit_profile_screen.dart';
 import 'membership_screen.dart';
 import 'payment_methods_screen.dart';
 
@@ -23,49 +23,10 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _imagePicker = ImagePicker();
-  bool _avatarBusy = false;
-
-  Future<void> _changeAvatar() async {
-    try {
-      final image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-        maxWidth: 1200,
-      );
-      if (image == null || !mounted) return;
-      setState(() => _avatarBusy = true);
-      await Api.I.uploadAvatar(image.path);
-      if (mounted) {
-        setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile photo updated.')),
-        );
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not open the gallery or upload the photo.',
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _avatarBusy = false);
-    }
-  }
-
   Widget _avatarButton({double size = 116}) {
     final url = (Api.I.user?['avatar_url'] ?? '').toString();
     return InkWell(
-      onTap: _avatarBusy ? null : _changeAvatar,
+      onTap: _openEditProfile,
       customBorder: const CircleBorder(),
       child: SizedBox(
         width: size,
@@ -80,14 +41,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: .16),
+                      color: Theme.of(context).colorScheme.primary
+                          .withValues(alpha: .16),
                       width: 5,
                     ),
                   ),
                   child: ClipOval(
                     child: url.isEmpty
                         ? ColoredBox(
-                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest,
                             child: Icon(
                               Icons.person,
                               color: Theme.of(context).colorScheme.primary,
@@ -108,23 +72,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.primary,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 3),
+                  border: Border.all(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    width: 3,
+                  ),
                 ),
                 alignment: Alignment.center,
-                child: _avatarBusy
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(
-                        Icons.camera_alt_rounded,
-                        size: 20,
-                        color: Colors.white,
-                      ),
+                child: const Icon(
+                  Icons.edit_rounded,
+                  size: 19,
+                  color: Colors.white,
+                ),
               ),
             ),
           ],
@@ -133,68 +91,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _editProfile() async {
-    final u = Api.I.user ?? {};
-    final name = TextEditingController(text: '${u['name'] ?? ''}');
-    final phone = TextEditingController(text: '${u['phone'] ?? ''}');
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Edit profile'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: name,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(labelText: 'Full name'),
-              ),
-              TextField(
-                controller: phone,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Phone number'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(minimumSize: const Size(100, 44)),
-            onPressed: () {
-              if (name.text.trim().isEmpty) return;
-              Navigator.pop(ctx, true);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) {
-      try {
-        await Api.I.updateProfile(
-          name: name.text.trim(),
-          phone: phone.text.trim(),
-        );
-        if (mounted) {
-          setState(() {});
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Profile updated.')));
-        }
-      } on ApiException catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(e.message)));
-        }
-      }
-    }
-    name.dispose();
-    phone.dispose();
+  Future<void> _openEditProfile() async {
+    final changed = await Navigator.of(
+      context,
+    ).push<bool>(MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+    if (changed == true && mounted) setState(() {});
   }
 
   Future<void> _changePassword() async {
@@ -215,7 +116,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 TextFormField(
                   controller: current,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Current password'),
+                  decoration: const InputDecoration(
+                    labelText: 'Current password',
+                  ),
                   validator: (value) => (value == null || value.isEmpty)
                       ? 'Enter your current password'
                       : null,
@@ -237,9 +140,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Confirm new password',
                   ),
-                  validator: (value) => value != next.text
-                      ? 'Passwords do not match'
-                      : null,
+                  validator: (value) =>
+                      value != next.text ? 'Passwords do not match' : null,
                 ),
               ],
             ),
@@ -366,20 +268,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                title: const Text('Edit profile'),
-                subtitle: const Text('Change your full name or phone number'),
-                onTap: () => Navigator.pop(context, 'edit'),
-              ),
-              ListTile(
                 leading: const Icon(Icons.lock_outline),
                 title: const Text('Change password'),
                 onTap: () => Navigator.pop(context, 'password'),
               ),
               SwitchListTile.adaptive(
-                secondary: Icon(AppThemeController.I.mode == ThemeMode.dark
-                    ? Icons.dark_mode_outlined
-                    : Icons.light_mode_outlined),
+                secondary: Icon(
+                  AppThemeController.I.mode == ThemeMode.dark
+                      ? Icons.dark_mode_outlined
+                      : Icons.light_mode_outlined,
+                ),
                 title: const Text('Dark mode'),
                 value: AppThemeController.I.mode == ThemeMode.dark,
                 onChanged: (enabled) async {
@@ -404,16 +302,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
     if (!mounted) return;
-    if (action == 'edit') await _editProfile();
     if (action == 'password') await _changePassword();
     if (action == 'delete') await _deleteAccount();
   }
 
   void _openPaymentInfo() {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const PaymentMethodsScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const PaymentMethodsScreen()),
     );
   }
 
@@ -432,7 +327,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _profileRow(BuildContext context, IconData icon, String title, VoidCallback onTap) {
+  Widget _profileRow(
+    BuildContext context,
+    IconData icon,
+    String title,
+    VoidCallback onTap,
+  ) {
     final colors = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
@@ -457,7 +357,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, size: 25, color: colors.primary),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 25,
+                color: colors.primary,
+              ),
             ],
           ),
         ),
@@ -522,9 +426,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 IconButton(
                   tooltip: 'Edit profile',
-                  onPressed: _editProfile,
+                  onPressed: _openEditProfile,
                   style: IconButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: .08),
+                    backgroundColor: Theme.of(context).colorScheme.primary
+                        .withValues(alpha: .08),
                     minimumSize: const Size(54, 54),
                   ),
                   icon: const Icon(Icons.edit_outlined, size: 25),
@@ -532,65 +437,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
-          Column(children: [
-            _profileRow(
-              context,
-              Icons.card_membership_rounded,
-              'Membership & Rewards',
-              () => open(const MembershipScreen()),
-            ),
-            const Divider(height: 1, indent: 74),
-            _profileRow(
-              context,
-              Icons.receipt_long_outlined,
-              'My Orders',
-              () => rootTab.value = 3,
-            ),
-            const Divider(height: 1, indent: 74),
-            _profileRow(
-              context,
-              Icons.location_on_outlined,
-              'Addresses',
-              () => open(const AddressesScreen()),
-            ),
-            const Divider(height: 1, indent: 74),
-            _profileRow(
-              context,
-              Icons.credit_card_outlined,
-              'Payment Methods',
-              _openPaymentInfo,
-            ),
-            const Divider(height: 1, indent: 74),
-            _profileRow(
-              context,
-              Icons.favorite_border_rounded,
-              'Favorites',
-              () => open(const FavoritesScreen()),
-            ),
-            const Divider(height: 1, indent: 74),
-            _profileRow(
-              context,
-              Icons.notifications_none_rounded,
-              'Notifications',
-              () => open(const NotificationsScreen()),
-            ),
-            const Divider(height: 1, indent: 74),
-            _profileRow(
-              context,
-              Icons.help_outline_rounded,
-              'Help & Support',
-              _openHelp,
-            ),
-            const Divider(height: 1, indent: 74),
-            _profileRow(context, Icons.info_outline_rounded, 'About', _openAbout),
-            const Divider(height: 1, indent: 74),
-            _profileRow(
-              context,
-              Icons.logout_rounded,
-              'Log out',
-              _logout,
-            ),
-          ]),
+          Column(
+            children: [
+              _profileRow(
+                context,
+                Icons.card_membership_rounded,
+                'Membership & Rewards',
+                () => open(const MembershipScreen()),
+              ),
+              const Divider(height: 1, indent: 74),
+              _profileRow(
+                context,
+                Icons.receipt_long_outlined,
+                'My Orders',
+                () => rootTab.value = 3,
+              ),
+              const Divider(height: 1, indent: 74),
+              _profileRow(
+                context,
+                Icons.location_on_outlined,
+                'Addresses',
+                () => open(const AddressesScreen()),
+              ),
+              const Divider(height: 1, indent: 74),
+              _profileRow(
+                context,
+                Icons.credit_card_outlined,
+                'Payment Methods',
+                _openPaymentInfo,
+              ),
+              const Divider(height: 1, indent: 74),
+              _profileRow(
+                context,
+                Icons.favorite_border_rounded,
+                'Favorites',
+                () => open(const FavoritesScreen()),
+              ),
+              const Divider(height: 1, indent: 74),
+              _profileRow(
+                context,
+                Icons.notifications_none_rounded,
+                'Notifications',
+                () => open(const NotificationsScreen()),
+              ),
+              const Divider(height: 1, indent: 74),
+              _profileRow(
+                context,
+                Icons.help_outline_rounded,
+                'Help & Support',
+                _openHelp,
+              ),
+              const Divider(height: 1, indent: 74),
+              _profileRow(
+                context,
+                Icons.info_outline_rounded,
+                'About',
+                _openAbout,
+              ),
+              const Divider(height: 1, indent: 74),
+              _profileRow(context, Icons.logout_rounded, 'Log out', _logout),
+            ],
+          ),
         ],
       ),
     );

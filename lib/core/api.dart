@@ -56,6 +56,8 @@ class Api {
     final email = p.getString('user_email');
     final phone = p.getString('user_phone');
     final role = p.getString('user_role');
+    final bio = p.getString('user_bio');
+    final preferredLanguage = p.getString('user_preferred_language');
     final avatar = p.getString('user_avatar');
     final avatarUrl = _resolveAvatarUrl(
       p.getString('user_avatar_url') ??
@@ -66,6 +68,8 @@ class Api {
         'name': name,
         'email': email,
         'phone': phone,
+        'bio': ?bio,
+        'preferred_language': ?preferredLanguage,
         'role': role,
         'avatar': ?avatar,
         'avatar_url': ?avatarUrl,
@@ -86,6 +90,8 @@ class Api {
       await p.remove('user_name');
       await p.remove('user_email');
       await p.remove('user_phone');
+      await p.remove('user_bio');
+      await p.remove('user_preferred_language');
       await p.remove('user_role');
       await p.remove('user_avatar');
       await p.remove('user_avatar_url');
@@ -94,6 +100,11 @@ class Api {
       await p.setString('user_name', savedUser?['name']?.toString() ?? '');
       await p.setString('user_email', savedUser?['email']?.toString() ?? '');
       await p.setString('user_phone', savedUser?['phone']?.toString() ?? '');
+      await p.setString('user_bio', savedUser?['bio']?.toString() ?? '');
+      await p.setString(
+        'user_preferred_language',
+        savedUser?['preferred_language']?.toString() ?? 'en',
+      );
       await p.setString(
         'user_role',
         savedUser?['role']?.toString() ?? 'customer',
@@ -241,15 +252,16 @@ class Api {
   Future<Map<String, dynamic>> startGuestSupportConversation({
     required String name,
     required String contact,
-  }) async =>
-      Map<String, dynamic>.from(
-        _d(await _call(
-          'POST',
-          '/support/guest/conversations',
-          auth: false,
-          body: {'name': name, 'contact': contact},
-        )) as Map,
-      );
+  }) async => Map<String, dynamic>.from(
+    _d(
+      await _call(
+        'POST',
+        '/support/guest/conversations',
+        auth: false,
+        body: {'name': name, 'contact': contact},
+      ),
+    ) as Map,
+  );
 
   Future<Map<String, dynamic>> supportConversationMessages(int id) async =>
       Map<String, dynamic>.from(
@@ -259,15 +271,16 @@ class Api {
   Future<Map<String, dynamic>> guestSupportConversationMessages(
     String uuid,
     String token,
-  ) async =>
-      Map<String, dynamic>.from(
-        _d(await _call(
-          'GET',
-          '/support/guest/conversations/$uuid',
-          auth: false,
-          extraHeaders: {'X-Support-Token': token},
-        )) as Map,
-      );
+  ) async => Map<String, dynamic>.from(
+    _d(
+      await _call(
+        'GET',
+        '/support/guest/conversations/$uuid',
+        auth: false,
+        extraHeaders: {'X-Support-Token': token},
+      ),
+    ) as Map,
+  );
 
   Future<Map<String, dynamic>> sendSupportMessage({
     required int conversationId,
@@ -287,15 +300,17 @@ class Api {
         ? '/support/conversations/$conversationId/messages'
         : '/support/guest/conversations/$guestUuid/messages';
     return Map<String, dynamic>.from(
-      _d(await _call(
-        'POST',
-        path,
-        body: form,
-        auth: guestUuid == null,
-        extraHeaders: guestToken == null
-            ? null
-            : {'X-Support-Token': guestToken},
-      )) as Map,
+      _d(
+        await _call(
+          'POST',
+          path,
+          body: form,
+          auth: guestUuid == null,
+          extraHeaders: guestToken == null
+              ? null
+              : {'X-Support-Token': guestToken},
+        ),
+      ) as Map,
     );
   }
 
@@ -460,14 +475,15 @@ class Api {
   Future<Map<String, dynamic>> reverseGeocode(
     double latitude,
     double longitude,
-  ) async =>
-      Map<String, dynamic>.from(
-        _d(await _call(
-          'GET',
-          '/location/reverse-geocode',
-          query: {'latitude': latitude, 'longitude': longitude},
-        )) as Map,
-      );
+  ) async => Map<String, dynamic>.from(
+    _d(
+      await _call(
+        'GET',
+        '/location/reverse-geocode',
+        query: {'latitude': latitude, 'longitude': longitude},
+      ),
+    ) as Map,
+  );
 
   // ---------- NOTIFICATIONS ----------
   Future<Map<String, dynamic>> notifications() async =>
@@ -485,10 +501,7 @@ class Api {
     await _call(
       'POST',
       '/notifications/device-token',
-      body: {
-        'token': token,
-        'platform': defaultTargetPlatform.name,
-      },
+      body: {'token': token, 'platform': defaultTargetPlatform.name},
     );
   }
 
@@ -504,15 +517,25 @@ class Api {
   Future<void> updateProfile({
     String? name,
     String? phone,
+    String? bio,
+    String? preferredLanguage,
+    String? avatarPath,
   }) async {
-    final r = await _call(
-      'PUT',
-      '/profile',
-      body: {
-        if (name != null && name.isNotEmpty) 'name': name,
-        if (phone != null) 'phone': phone.isEmpty ? null : phone,
-      },
-    );
+    final fields = <String, dynamic>{
+      if (name != null && name.isNotEmpty) 'name': name,
+      if (phone != null) 'phone': phone.trim(),
+      if (bio != null) 'bio': bio.trim(),
+      'preferred_language': ?preferredLanguage,
+    };
+    var method = 'PUT';
+    Object body = fields;
+    if (avatarPath != null) {
+      fields['_method'] = 'PUT';
+      fields['avatar'] = await MultipartFile.fromFile(avatarPath);
+      body = FormData.fromMap(fields);
+      method = 'POST';
+    }
+    final r = await _call(method, '/profile', body: body);
     final u = Map<String, dynamic>.from(_d(r) as Map);
     await _save(_token, u);
   }
@@ -534,28 +557,7 @@ class Api {
   }
 
   Future<void> uploadAvatar(String filePath) async {
-    final form = FormData.fromMap({
-      '_method': 'PUT',
-      'avatar': await MultipartFile.fromFile(filePath),
-    });
-    final response = await _call('POST', '/profile', body: form);
-    final payload = response['data'] ?? response;
-    if (payload is! Map) {
-      throw ApiException(
-        'The photo uploaded, but the server did not return profile data.',
-      );
-    }
-    final body = Map<String, dynamic>.from(payload);
-    final rawUser = body['user'] ?? body['data'];
-    final user = rawUser is Map
-        ? Map<String, dynamic>.from(rawUser)
-        : (body['id'] != null || body['name'] != null ? body : null);
-    if (user == null) {
-      throw ApiException(
-        body['message']?.toString() ?? 'The server did not return the profile after upload. Check the Laravel API /profile response.',
-      );
-    }
-    await _save(_token, user);
+    await updateProfile(avatarPath: filePath);
   }
 
   Future<void> deleteAccount(String password) async {
@@ -626,9 +628,7 @@ class Api {
     return Map<String, dynamic>.from(_d(response) as Map);
   }
 
-  Future<Map<String, dynamic>> cancelRewardRedemption(
-    int redemptionId,
-  ) async {
+  Future<Map<String, dynamic>> cancelRewardRedemption(int redemptionId) async {
     final response = await _call(
       'POST',
       '/rewards/redemptions/$redemptionId/cancel',
@@ -649,18 +649,26 @@ class Api {
   );
 
   Future<Map<String, dynamic>> riderProfile() async =>
-      Map<String, dynamic>.from(_d(await _call('GET', '/rider/profile')) as Map);
+      Map<String, dynamic>.from(
+        _d(await _call('GET', '/rider/profile')) as Map,
+      );
 
   Future<Map<String, dynamic>> updateRiderVehicle({
     required String vehicleType,
     required String plateNumber,
     required String licenseNumber,
   }) async => Map<String, dynamic>.from(
-    _d(await _call('PUT', '/rider/profile', body: {
-      'vehicle_type': vehicleType,
-      'plate_number': plateNumber,
-      'license_no': licenseNumber,
-    })) as Map,
+    _d(
+      await _call(
+        'PUT',
+        '/rider/profile',
+        body: {
+          'vehicle_type': vehicleType,
+          'plate_number': plateNumber,
+          'license_no': licenseNumber,
+        },
+      ),
+    ) as Map,
   );
 
   Future<Map<String, dynamic>> delivery(int id) async =>
