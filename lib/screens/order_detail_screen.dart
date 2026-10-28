@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -9,7 +10,9 @@ import '../core/api.dart';
 import '../core/realtime.dart';
 import '../core/theme.dart';
 import '../core/util.dart';
+import '../core/widgets.dart';
 import '../state/nav.dart';
+import 'customer_service_sheet.dart';
 import 'payment_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
@@ -26,32 +29,51 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool _loading = true;
   String? _error;
   StreamSubscription<Map<String, dynamic>>? _liveSubscription;
+  Timer? _trackingTimer;
+  bool _refreshing = false;
+  bool _fullMapOpen = false;
+  final MapController _mapController = MapController();
   int _rating = 5;
   final _comment = TextEditingController();
   bool _busy = false;
-  bool _showDetails = false;
+  bool _showDetails = true;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _startTrackingPolling();
     Realtime.I.connect();
     _liveSubscription = Realtime.I.updates.listen((event) {
-      if (event['kind'] == 'order' || event['kind'] == 'delivery' || event['kind'] == 'payment') _load(silent: true);
+      if (!_fullMapOpen &&
+          const {
+            'order',
+            'delivery',
+            'payment',
+            'rider',
+          }.contains(event['kind'])) {
+        _load(silent: true);
+      }
     });
   }
 
   @override
   void dispose() {
     _liveSubscription?.cancel();
+    _trackingTimer?.cancel();
     _comment.dispose();
     super.dispose();
   }
 
   Future<void> _load({bool silent = false}) async {
+    if (_refreshing) return;
+    _refreshing = true;
     try {
-      final o = await Api.I.order(widget.id);
       final t = await Api.I.tracking(widget.id);
+      final trackingOrder = t['order'];
+      final o = trackingOrder is Map
+          ? Map<String, dynamic>.from(trackingOrder)
+          : await Api.I.order(widget.id);
       if (!mounted) return;
       setState(() {
         _o = o;
@@ -59,6 +81,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         _loading = false;
         _error = null;
       });
+      if (_isFinalStatus('${o['status']}')) _trackingTimer?.cancel();
     } on ApiException catch (e) {
       if (!mounted) return;
       if (!silent) {
@@ -67,7 +90,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           _loading = false;
         });
       }
+    } finally {
+      _refreshing = false;
     }
+  }
+
+  bool _isFinalStatus(String status) => const {
+    'delivered',
+    'completed',
+    'cancelled',
+    'rejected',
+  }.contains(status);
+
+  void _startTrackingPolling() {
+    _trackingTimer?.cancel();
+    _trackingTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+      final status = _o?['status']?.toString();
+      if (mounted && (status == null || !_isFinalStatus(status))) {
+        _load(silent: true);
+      }
+    });
   }
 
   Future<void> _cancel() async {
@@ -79,8 +121,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       reason = await showDialog<String>(
         context: context,
         builder: (ctx) => Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 24,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 460),
             child: SingleChildScrollView(
@@ -99,15 +146,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           color: Theme.of(context).colorScheme.errorContainer,
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(Icons.free_cancellation_rounded, color: Theme.of(context).colorScheme.error, size: 29),
+                        child: Icon(
+                          Icons.free_cancellation_rounded,
+                          color: Theme.of(context).colorScheme.error,
+                          size: 29,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Cancel this order?', textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+                    const Text(
+                      'Cancel this order?',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     const SizedBox(height: 8),
-                    Text('Are you sure you want to cancel this order?', textAlign: TextAlign.center,
-                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                    Text(
+                      'Are you sure you want to cancel this order?',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                     const SizedBox(height: 20),
                     TextFormField(
                       controller: reasonController,
@@ -125,8 +187,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           child: Icon(Icons.chat_bubble_outline_rounded),
                         ),
                       ),
-                      validator: (value) => value == null || value.trim().isEmpty
-                          ? 'Please enter a reason for cancellation.' : null,
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Please enter a reason for cancellation.'
+                          : null,
                     ),
                     const SizedBox(height: 12),
                     FilledButton.icon(
@@ -146,7 +210,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: () => Navigator.pop(ctx),
-                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
                       child: const Text('Keep My Order'),
                     ),
                   ],
@@ -166,17 +232,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Your order has been cancelled successfully.')),
+          const SnackBar(
+            content: Text('Your order has been cancelled successfully.'),
+          ),
         );
       }
     } on ApiException catch (e) {
-      final noLongerCancellable = e.message.toLowerCase().contains('can no longer be cancelled');
+      final noLongerCancellable = e.message.toLowerCase().contains(
+        'can no longer be cancelled',
+      );
       if (noLongerCancellable) await _load();
       if (!mounted) return;
       final message = noLongerCancellable
           ? 'This order can no longer be cancelled because it has already progressed.'
           : e.message;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -228,17 +299,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     Map<String, dynamic> order,
     Map<String, dynamic> tracking,
     String address,
-  ) => showDialog<void>(
-    context: context,
-    builder: (_) => Dialog.fullscreen(
-      child: _LiveRiderMap(
-        orderId: widget.id,
-        orderNumber: '${order['order_number'] ?? 'Order'}',
-        address: address,
-        initialTracking: tracking,
-      ),
-    ),
-  );
+  ) async {
+    _trackingTimer?.cancel();
+    _fullMapOpen = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => Dialog.fullscreen(
+          child: _LiveRiderMap(
+            orderId: widget.id,
+            orderNumber: '${order['order_number'] ?? 'Order'}',
+            address: address,
+            initialTracking: tracking,
+          ),
+        ),
+      );
+    } finally {
+      _fullMapOpen = false;
+      if (mounted && !_isFinalStatus(_o?['status']?.toString() ?? '')) {
+        _startTrackingPolling();
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -261,7 +343,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           },
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: const Text('Track Order'),
+        title: const Text('Order Tracking'),
+        actions: [
+          IconButton(
+            tooltip: 'Contact support',
+            onPressed: () => showCustomerServiceSheet(context),
+            icon: const Icon(Icons.support_agent_rounded),
+          ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -304,25 +393,45 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ? null
         : rawShopPoint;
     final riderPoint = rider == null ? null : point(rider);
-    final points = <LatLng>[
-      ?destinationPoint,
-      ?riderPoint,
-      ?shopPoint,
-    ];
+    final routeData = t['route'] is Map
+        ? Map<String, dynamic>.from(t['route'] as Map)
+        : <String, dynamic>{};
+    final routePoints = routeData['points'] is List
+        ? mapList(routeData['points'])
+              .where((p) => p['lat'] != null && p['lng'] != null)
+              .map((p) => LatLng(dbl(p['lat']), dbl(p['lng'])))
+              .toList()
+        : <LatLng>[];
+    final routeMinutes = routeData['duration_seconds'] is num
+        ? math
+              .max(1, ((routeData['duration_seconds'] as num) / 60).ceil())
+              .toInt()
+        : null;
+    final routeKm = routeData['distance_meters'] is num
+        ? ((routeData['distance_meters'] as num) / 1000).toStringAsFixed(1)
+        : null;
+    final lastLocationAt = DateTime.tryParse(
+      '${rider?['last_updated_at'] ?? ''}',
+    )?.toLocal();
+    final isLive =
+        riderPoint != null &&
+        lastLocationAt != null &&
+        DateTime.now().difference(lastLocationAt).inSeconds <= 30;
+    final points = <LatLng>[...routePoints, ?destinationPoint, ?riderPoint];
     final isDelivered = status == 'delivered' || status == 'completed';
     final isOnRoute = status == 'on_the_way' || status == 'picked_up';
     final currentStep = isDelivered
-        ? 3
+        ? 4
         : isOnRoute
+        ? 3
+        : (status == 'ready' || status == 'rider_assigned')
         ? 2
-        : (status == 'preparing' || status == 'ready' || status == 'rider_assigned')
+        : status == 'preparing'
         ? 1
         : status == 'confirmed'
         ? 0
         : -1;
-    final eta = rider?['eta_min'];
     final address = (o['delivery_address'] ?? dest['address'] ?? '').toString();
-
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
@@ -332,105 +441,35 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             Expanded(
               child: Text(
                 '${o['order_number'] ?? 'Order'}',
-                style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
-            IconButton(
-              tooltip: 'Refresh tracking',
-              onPressed: () => _load(silent: true),
-              icon: const Icon(Icons.refresh_rounded),
+            Text(
+              isDelivery ? 'Live delivery tracking' : _statusText(status, type),
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
-        ),
-        Card(
-          elevation: 1,
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        isDelivery
-                            ? Icons.delivery_dining_rounded
-                            : Icons.storefront_rounded,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: 29,
-                      ),
-                    ),
-                    const SizedBox(width: 13),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isDelivered
-                                ? 'Your order has been delivered!'
-                                : isOnRoute
-                                ? 'Your order is on the way!'
-                                : 'Your order is being prepared',
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _statusText(status, type),
-                            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (eta != null && !isDelivered)
-                      Text(
-                        'Arriving in $eta min',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                Row(
-                  children: [
-                    _trackingStep('Confirm', 0, currentStep),
-                    Expanded(child: _progressLine(currentStep >= 1)),
-                    _trackingStep('Preparing', 1, currentStep),
-                    Expanded(child: _progressLine(currentStep >= 2)),
-                    _trackingStep('Out for Delivery', 2, currentStep),
-                    Expanded(child: _progressLine(currentStep >= 3)),
-                    _trackingStep('Delivered', 3, currentStep),
-                  ],
-                ),
-              ],
-            ),
-          ),
         ),
         const SizedBox(height: 14),
         if (isDelivery) ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(22),
             child: SizedBox(
-              height: 300,
+              height: (MediaQuery.sizeOf(context).height * 0.36)
+                  .clamp(300.0, 420.0)
+                  .toDouble(),
               child: destinationPoint == null
                   ? _mapPlaceholder(address)
                   : Stack(
                       children: [
                         FlutterMap(
+                          mapController: _mapController,
                           options: MapOptions(
                             initialCenter: riderPoint ?? destinationPoint,
                             initialZoom: 15,
@@ -444,17 +483,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           ),
                           children: [
                             TileLayer(
-                              urlTemplate:
-                                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                               userAgentPackageName: 'com.kjmcoffeebrew.app',
                             ),
-                            if (riderPoint != null)
+                            if (routePoints.length > 1)
                               PolylineLayer(
                                 polylines: [
                                   Polyline(
-                                    points: [destinationPoint, riderPoint],
+                                    points: routePoints,
                                     color: caramel,
-                                    strokeWidth: 5,
+                                    strokeWidth: 6,
+                                    borderColor: Colors.white,
+                                    borderStrokeWidth: 2,
                                   ),
                                 ],
                               ),
@@ -490,6 +530,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 TextSourceAttribution(
                                   'OpenStreetMap contributors',
                                 ),
+                                TextSourceAttribution('Route via OSRM'),
                               ],
                             ),
                           ],
@@ -503,6 +544,35 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               destinationPoint,
                             ),
                           ),
+                        Positioned(
+                          top: 12,
+                          right: 12,
+                          child: _routeMapBadge(
+                            context,
+                            live: isLive,
+                            updatedAt: lastLocationAt,
+                            eta: routeMinutes,
+                            distance: routeKm,
+                            error: routeData['error']?.toString(),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 12,
+                          right: 12,
+                          child: Material(
+                            color: Theme.of(context).colorScheme.surface,
+                            shape: const CircleBorder(),
+                            elevation: 3,
+                            child: IconButton(
+                              tooltip: 'Recenter map',
+                              onPressed: () {
+                                final focus = riderPoint ?? destinationPoint;
+                                _mapController.move(focus, 15);
+                              },
+                              icon: const Icon(Icons.my_location_rounded),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
             ),
@@ -533,8 +603,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 child: Text(
                   riderPoint == null
                       ? 'Location will appear here once the rider starts sharing their location.'
-                      : 'Rider location updates every few seconds.',
-                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      : 'Rider location updates about every 8 seconds.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ],
@@ -551,12 +624,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 children: [
                   CircleAvatar(
                     radius: 25,
-                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    child: Icon(
-                      Icons.delivery_dining_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 28,
-                    ),
+                    backgroundColor: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest,
+                    foregroundImage:
+                        rider?['avatar_url'] != null &&
+                            '${rider?['avatar_url']}'.isNotEmpty
+                        ? NetworkImage(fixUrl('${rider?['avatar_url']}'))
+                        : null,
+                    child:
+                        rider?['avatar_url'] == null ||
+                            '${rider?['avatar_url']}'.isEmpty
+                        ? Icon(
+                            Icons.delivery_dining_rounded,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 28,
+                          )
+                        : null,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -574,7 +658,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               : 'Delivery rider',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
                           ),
                         ),
                         if (rider?['plate_number'] != null)
@@ -582,7 +668,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             '${rider!['plate_number']}',
                             style: TextStyle(
                               fontSize: 11,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                             ),
                           ),
                       ],
@@ -604,6 +692,154 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
           ),
         ],
+        Card(
+          elevation: 1,
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isDelivery
+                            ? Icons.delivery_dining_rounded
+                            : Icons.storefront_rounded,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 29,
+                      ),
+                    ),
+                    const SizedBox(width: 13),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isDelivered
+                                ? 'Your order has been delivered!'
+                                : isOnRoute
+                                ? 'Your order is on the way!'
+                                : 'Your order is being prepared',
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _statusText(status, type),
+                            style: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (routeMinutes != null && !isDelivered && isOnRoute)
+                      Text(
+                        'Approx. $routeMinutes min',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _trackingStep('Confirmed', 0, currentStep),
+                      _progressLine(currentStep >= 1),
+                      _trackingStep('Preparing', 1, currentStep),
+                      _progressLine(currentStep >= 2),
+                      _trackingStep('Ready', 2, currentStep),
+                      _progressLine(currentStep >= 3),
+                      _trackingStep('Out for Delivery', 3, currentStep),
+                      _progressLine(currentStep >= 4),
+                      _trackingStep('Delivered', 4, currentStep),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Card(
+          elevation: 1,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Delivery Updates',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 12),
+                if (timeline.isEmpty)
+                  Text(
+                    'Order updates will appear here as the shop changes its status.',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  )
+                else
+                  for (final entry in timeline)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.check_circle_rounded,
+                            size: 18,
+                            color: statusColor('${entry['status']}'),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _statusText('${entry['status']}', type),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            timeText(entry['at']),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+              ],
+            ),
+          ),
+        ),
         const SizedBox(height: 12),
         SizedBox(
           height: 46,
@@ -636,7 +872,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             child: ExpansionTile(
               tilePadding: const EdgeInsets.symmetric(horizontal: 16),
               childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              leading: Icon(Icons.receipt_long_rounded, color: Theme.of(context).colorScheme.primary),
+              leading: Icon(
+                Icons.receipt_long_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              ),
               title: const Text(
                 'Order details',
                 style: TextStyle(fontWeight: FontWeight.w700),
@@ -676,7 +915,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   (item['options'] as List).join(', '),
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
                                   ),
                                 ),
                             ],
@@ -706,40 +947,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     style: const TextStyle(color: Colors.red),
                   ),
                 ],
-                if (timeline.isNotEmpty) ...[
-                  const Divider(height: 24),
-                  const Text(
-                    'Status history',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  for (final entry in timeline)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.check_circle_rounded,
-                            size: 17,
-                            color: statusColor('${entry['status']}'),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _statusText('${entry['status']}', type),
-                            ),
-                          ),
-                          Text(
-                            timeText(entry['at']),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
               ],
             ),
           ),
@@ -757,7 +964,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
             onPressed: _busy ? null : _cancel,
             icon: _busy
-                ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.cancel_outlined),
             label: Text(_busy ? 'Cancelling…' : 'Cancel order'),
           ),
@@ -841,15 +1051,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _trackingStep(String label, int step, int current) {
     final done = step <= current;
-    final stageColors = [Colors.blue, Colors.orange, Colors.deepOrange, Colors.green];
-    final activeColor = stageColors[step.clamp(0, stageColors.length - 1).toInt()];
+    final stageColors = [
+      espresso,
+      caramel,
+      caramel,
+      Colors.deepOrange,
+      Colors.green,
+    ];
+    final activeColor =
+        stageColors[step.clamp(0, stageColors.length - 1).toInt()];
     return SizedBox(
-      width: 66,
+      width: 72,
       child: Column(
         children: [
           CircleAvatar(
             radius: 12,
-            backgroundColor: done ? activeColor : Theme.of(context).colorScheme.surfaceContainerHighest,
+            backgroundColor: done
+                ? activeColor
+                : Theme.of(context).colorScheme.surfaceContainerHighest,
             child: Icon(
               step < current
                   ? Icons.check
@@ -858,10 +1077,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   : step == 1
                   ? Icons.coffee_rounded
                   : step == 2
+                  ? Icons.inventory_2_rounded
+                  : step == 3
                   ? Icons.delivery_dining_rounded
                   : Icons.home_rounded,
               size: 14,
-              color: done ? Colors.white : Theme.of(context).colorScheme.onSurfaceVariant,
+              color: done
+                  ? Colors.white
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 5),
@@ -870,7 +1093,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 9,
-              color: done ? activeColor : Theme.of(context).colorScheme.onSurfaceVariant,
+              color: done
+                  ? activeColor
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
               fontWeight: done ? FontWeight.w600 : FontWeight.normal,
             ),
           ),
@@ -880,8 +1105,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _progressLine(bool active) => Container(
+    width: 18,
     height: 2,
-    color: active ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
+    color: active
+        ? Theme.of(context).colorScheme.primary
+        : Theme.of(context).colorScheme.surfaceContainerHighest,
     margin: const EdgeInsets.only(bottom: 18),
   );
 
@@ -890,7 +1118,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       shape: BoxShape.circle,
       border: Border.all(color: color, width: 2),
-      boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.shadow, blurRadius: 5)],
+      boxShadow: [
+        BoxShadow(color: Theme.of(context).colorScheme.shadow, blurRadius: 5),
+      ],
     ),
     child: Icon(icon, color: color, size: 25),
   );
@@ -902,7 +1132,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.location_searching_rounded, size: 44, color: Theme.of(context).colorScheme.primary),
+        Icon(
+          Icons.location_searching_rounded,
+          size: 44,
+          color: Theme.of(context).colorScheme.primary,
+        ),
         const SizedBox(height: 10),
         const Text(
           'No map location available for this address.',
@@ -914,7 +1148,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           Text(
             address,
             textAlign: TextAlign.center,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ],
@@ -926,7 +1162,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         onPressed: onPressed,
         icon: Icon(icon, size: 19),
         style: IconButton.styleFrom(
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+          backgroundColor: Theme.of(context)
+              .colorScheme
+              .surfaceContainerHighest,
           foregroundColor: espresso,
         ),
       );
@@ -944,7 +1182,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             children: [
               Text(
                 label,
-                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 2),
               Text(value),
@@ -993,13 +1234,24 @@ class _LiveRiderMapState extends State<_LiveRiderMap> {
   late Map<String, dynamic> _tracking;
   StreamSubscription<Map<String, dynamic>>? _subscription;
   bool _refreshing = false;
+  Timer? _locationTimer;
+  final MapController _mapController = MapController();
+  bool _finished = false;
 
   @override
   void initState() {
     super.initState();
     _tracking = widget.initialTracking;
+    _finished = _trackingOrderFinished(_tracking);
+    if (!_finished) {
+      _locationTimer = Timer.periodic(
+        const Duration(seconds: 8),
+        (_) => _refreshLocation(),
+      );
+    }
     _subscription = Realtime.I.updates.listen((event) {
-      if (event['kind'] == 'order' || event['kind'] == 'delivery') {
+      if (!_finished &&
+          const {'order', 'delivery', 'rider'}.contains(event['kind'])) {
         _refreshLocation();
       }
     });
@@ -1008,6 +1260,7 @@ class _LiveRiderMapState extends State<_LiveRiderMap> {
   @override
   void dispose() {
     _subscription?.cancel();
+    _locationTimer?.cancel();
     super.dispose();
   }
 
@@ -1016,7 +1269,13 @@ class _LiveRiderMapState extends State<_LiveRiderMap> {
     _refreshing = true;
     try {
       final latest = await Api.I.tracking(widget.orderId);
-      if (mounted) setState(() => _tracking = latest);
+      if (mounted) {
+        setState(() {
+          _tracking = latest;
+          _finished = _trackingOrderFinished(latest);
+        });
+        if (_finished) _locationTimer?.cancel();
+      }
     } on ApiException {
       // Preserve the last known location if a live refresh briefly fails.
     } finally {
@@ -1040,24 +1299,45 @@ class _LiveRiderMapState extends State<_LiveRiderMap> {
     final riderPoint = _point(rider);
     final destinationPoint = _point(_tracking['destination']);
     final shopPoint = _point(_tracking['shop']);
+    final route = _tracking['route'] is Map
+        ? Map<String, dynamic>.from(_tracking['route'] as Map)
+        : <String, dynamic>{};
+    final routePoints = route['points'] is List
+        ? mapList(route['points'])
+              .where((p) => p['lat'] != null && p['lng'] != null)
+              .map((p) => LatLng(dbl(p['lat']), dbl(p['lng'])))
+              .toList()
+        : <LatLng>[];
+    final routeMinutes = route['duration_seconds'] is num
+        ? math.max(1, ((route['duration_seconds'] as num) / 60).ceil()).toInt()
+        : null;
+    final routeKm = route['distance_meters'] is num
+        ? ((route['distance_meters'] as num) / 1000).toStringAsFixed(1)
+        : null;
+    final lastLocationAt = DateTime.tryParse(
+      '${rider?['last_updated_at'] ?? ''}',
+    )?.toLocal();
+    final isLive =
+        riderPoint != null &&
+        lastLocationAt != null &&
+        DateTime.now().difference(lastLocationAt).inSeconds <= 30;
     final mapPoints = <LatLng>[
+      ...routePoints,
       ?riderPoint,
       ?destinationPoint,
-      if (shopPoint != null && shopPoint.latitude != 0 && shopPoint.longitude != 0)
+      if (shopPoint != null &&
+          shopPoint.latitude != 0 &&
+          shopPoint.longitude != 0)
         shopPoint,
     ];
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Rider location · ${widget.orderNumber}',
-            maxLines: 1, overflow: TextOverflow.ellipsis),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh location',
-            onPressed: _refreshing ? null : _refreshLocation,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
+        title: Text(
+          'Rider location · ${widget.orderNumber}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
       body: destinationPoint == null
           ? Center(
@@ -1066,80 +1346,125 @@ class _LiveRiderMapState extends State<_LiveRiderMap> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.location_off_outlined,
-                        size: 48, color: colors.primary),
+                    Icon(
+                      Icons.location_off_outlined,
+                      size: 48,
+                      color: colors.primary,
+                    ),
                     const SizedBox(height: 10),
-                    const Text('Map location is not available yet.',
-                        textAlign: TextAlign.center),
+                    const Text(
+                      'Map location is not available yet.',
+                      textAlign: TextAlign.center,
+                    ),
                     if (widget.address.isNotEmpty) ...[
                       const SizedBox(height: 6),
-                      Text(widget.address,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: colors.onSurfaceVariant)),
+                      Text(
+                        widget.address,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: colors.onSurfaceVariant),
+                      ),
                     ],
                   ],
                 ),
               ),
             )
-          : FlutterMap(
-              options: MapOptions(
-                initialCenter: riderPoint ?? destinationPoint,
-                initialZoom: 14,
-                initialCameraFit: mapPoints.length > 1
-                    ? CameraFit.bounds(
-                        bounds: LatLngBounds.fromPoints(mapPoints),
-                        padding: const EdgeInsets.all(48),
-                        maxZoom: 15,
-                      )
-                    : null,
-              ),
+          : Stack(
               children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.kjmcoffeebrew.app',
-                ),
-                if (riderPoint != null)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: [riderPoint, destinationPoint],
-                        color: colors.primary,
-                        strokeWidth: 5,
-                      ),
-                    ],
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: riderPoint ?? destinationPoint,
+                    initialZoom: 14,
+                    initialCameraFit: mapPoints.length > 1
+                        ? CameraFit.bounds(
+                            bounds: LatLngBounds.fromPoints(mapPoints),
+                            padding: const EdgeInsets.all(48),
+                            maxZoom: 15,
+                          )
+                        : null,
                   ),
-                MarkerLayer(
-                  markers: [
-                    if (shopPoint != null &&
-                        shopPoint.latitude != 0 &&
-                        shopPoint.longitude != 0)
-                      Marker(
-                        point: shopPoint,
-                        width: 48,
-                        height: 50,
-                        child: const Icon(Icons.storefront_rounded,
-                            color: caramel, size: 38),
-                      ),
-                    Marker(
-                      point: destinationPoint,
-                      width: 48,
-                      height: 50,
-                      child: const Icon(Icons.location_on_rounded,
-                          color: Colors.red, size: 42),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.kjmcoffeebrew.app',
                     ),
-                    if (riderPoint != null)
-                      Marker(
-                        point: riderPoint,
-                        width: 76,
-                        height: 60,
-                        child: _deliveryMapMarker(context),
+                    if (routePoints.length > 1)
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: routePoints,
+                            color: colors.primary,
+                            strokeWidth: 6,
+                            borderColor: Colors.white,
+                            borderStrokeWidth: 2,
+                          ),
+                        ],
                       ),
+                    MarkerLayer(
+                      markers: [
+                        if (shopPoint != null &&
+                            shopPoint.latitude != 0 &&
+                            shopPoint.longitude != 0)
+                          Marker(
+                            point: shopPoint,
+                            width: 48,
+                            height: 50,
+                            child: const Icon(
+                              Icons.storefront_rounded,
+                              color: caramel,
+                              size: 38,
+                            ),
+                          ),
+                        Marker(
+                          point: destinationPoint,
+                          width: 48,
+                          height: 50,
+                          child: const Icon(
+                            Icons.location_on_rounded,
+                            color: Colors.red,
+                            size: 42,
+                          ),
+                        ),
+                        if (riderPoint != null)
+                          Marker(
+                            point: riderPoint,
+                            width: 76,
+                            height: 60,
+                            child: _deliveryMapMarker(context),
+                          ),
+                      ],
+                    ),
+                    RichAttributionWidget(
+                      attributions: [
+                        TextSourceAttribution('OpenStreetMap contributors'),
+                        TextSourceAttribution('Route via OSRM'),
+                      ],
+                    ),
                   ],
                 ),
-                RichAttributionWidget(
-                  attributions: [
-                    TextSourceAttribution('OpenStreetMap contributors'),
-                  ],
+                Positioned(
+                  top: 14,
+                  right: 14,
+                  child: _routeMapBadge(
+                    context,
+                    live: isLive,
+                    updatedAt: lastLocationAt,
+                    eta: routeMinutes,
+                    distance: routeKm,
+                    error: route['error']?.toString(),
+                  ),
+                ),
+                Positioned(
+                  bottom: 18,
+                  right: 18,
+                  child: FloatingActionButton.small(
+                    heroTag: 'tracking-map-recenter',
+                    tooltip: 'Recenter map',
+                    onPressed: () =>
+                        _mapController.move(riderPoint ?? destinationPoint, 15),
+                    child: const Icon(Icons.my_location_rounded),
+                  ),
                 ),
               ],
             ),
@@ -1162,6 +1487,94 @@ Widget _riderDistanceBadge(LatLng rider, LatLng customer) => Container(
   ),
 );
 
+bool _trackingOrderFinished(Map<String, dynamic> tracking) {
+  final order = tracking['order'];
+  final status = order is Map ? order['status']?.toString() : null;
+  return const {
+    'delivered',
+    'completed',
+    'cancelled',
+    'rejected',
+  }.contains(status);
+}
+
+Widget _routeMapBadge(
+  BuildContext context, {
+  required bool live,
+  required DateTime? updatedAt,
+  required int? eta,
+  required String? distance,
+  required String? error,
+}) => Container(
+  constraints: const BoxConstraints(maxWidth: 210),
+  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+  decoration: BoxDecoration(
+    color: Theme.of(context).colorScheme.surface.withValues(alpha: .96),
+    borderRadius: BorderRadius.circular(16),
+    boxShadow: [
+      BoxShadow(
+        color: Theme.of(context).colorScheme.shadow.withValues(alpha: .2),
+        blurRadius: 8,
+        offset: const Offset(0, 2),
+      ),
+    ],
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.circle,
+            size: 9,
+            color: live ? Colors.green.shade700 : Colors.orange.shade700,
+          ),
+          const SizedBox(width: 5),
+          Text(
+            live ? 'LIVE' : 'LAST SEEN',
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+          ),
+          if (eta != null) ...[
+            const SizedBox(width: 9),
+            Text(
+              '$eta min${distance == null ? '' : ' · $distance km'}',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ],
+      ),
+      const SizedBox(height: 3),
+      Text(
+        updatedAt == null
+            ? 'Waiting for rider location'
+            : 'Updated ${timeText(updatedAt.toIso8601String())}',
+        style: TextStyle(
+          fontSize: 10,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+      if (error != null && error.isNotEmpty) ...[
+        const SizedBox(height: 5),
+        Text(
+          error,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 10,
+            color: Theme.of(context).colorScheme.error,
+          ),
+        ),
+      ],
+    ],
+  ),
+);
+
 Widget _deliveryMapMarker(BuildContext context) => Container(
   padding: const EdgeInsets.all(3),
   decoration: BoxDecoration(
@@ -1179,9 +1592,7 @@ Widget _deliveryMapMarker(BuildContext context) => Container(
   child: Image.asset(
     'assets/images/delivery.png',
     fit: BoxFit.contain,
-    errorBuilder: (context, error, stackTrace) => const Icon(
-      Icons.delivery_dining_rounded,
-      color: caramel,
-    ),
+    errorBuilder: (context, error, stackTrace) =>
+        const Icon(Icons.delivery_dining_rounded, color: caramel),
   ),
 );

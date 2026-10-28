@@ -54,12 +54,14 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
       return;
     }
     if (action == 'decline') {
+      if (!mounted) return;
       final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
         title: const Text('Decline this delivery?'),
         content: const Text('The shop will be notified and can assign this order to another rider.'),
         actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep delivery')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Decline'))],
       ));
       if (confirmed != true) return;
+      if (!mounted) return;
     }
     setState(() { _busy = true; _error = null; });
     try {
@@ -87,6 +89,7 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
     ));
     if (done == true && mounted) {
       await LocationService.I.stop();
+      if (!mounted) return;
       Navigator.of(context).pop();
     }
   }

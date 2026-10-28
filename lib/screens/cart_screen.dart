@@ -60,15 +60,15 @@ class CartScreen extends StatelessWidget {
                       final bundleIndex = index - lines.length;
                       final bundle = bundles[bundleIndex];
                       return Row(children: [
-                        ClipRRect(borderRadius: BorderRadius.circular(10), child: NetImage(bundle.imageUrl, width: 52, height: 58)),
+                        ClipRRect(borderRadius: BorderRadius.circular(10), child: NetImage(bundle.imageUrl, width: 58, height: 64)),
                         const SizedBox(width: 12),
                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text('${bundle.name} · Bundle', style: const TextStyle(fontWeight: FontWeight.w700)),
-                          Text(bundle.products.join(', '), maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                          const SizedBox(height: 4), Text(peso(bundle.price), style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
+                          Text(bundle.products.join(', '), maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                          const SizedBox(height: 4), Text(peso(bundle.price), style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
                           Row(mainAxisSize: MainAxisSize.min, children: [
                             _qtyButton(context, Icons.remove, () => Cart.I.setBundleQty(bundleIndex, bundle.qty - 1)),
-                            Text('${bundle.qty}'),
+                            Text('${bundle.qty}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                             _qtyButton(context, Icons.add, () => Cart.I.setBundleQty(bundleIndex, bundle.qty + 1)),
                           ]),
                         ])),
@@ -81,7 +81,7 @@ class CartScreen extends StatelessWidget {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: NetImage(line.imageUrl, width: 48, height: 58),
+                          child: NetImage(line.imageUrl, width: 58, height: 64),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -93,16 +93,17 @@ class CartScreen extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 peso(line.unitPrice),
                                 style: TextStyle(
-                                  fontSize: 12,
-                                  color: Theme.of(context).colorScheme.onSurface,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                               ),
                               if (line.optionNames.isNotEmpty)
@@ -128,7 +129,7 @@ class CartScreen extends StatelessWidget {
                                 ),
                               const SizedBox(height: 7),
                               Container(
-                                height: 28,
+                                height: 32,
                                 decoration: BoxDecoration(
                                   border: Border.all(
                                     color: Theme.of(context).dividerColor,
@@ -149,8 +150,8 @@ class CartScreen extends StatelessWidget {
                                         '${line.qty}',
                                         textAlign: TextAlign.center,
                                         style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
                                     ),
@@ -262,8 +263,8 @@ class CartScreen extends StatelessWidget {
   }
 
   static Widget _qtyButton(BuildContext context, IconData icon, VoidCallback onPressed) => SizedBox(
-    width: 28,
-    height: 26,
+    width: 32,
+    height: 30,
     child: IconButton(
       padding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
@@ -284,16 +285,16 @@ class CartScreen extends StatelessWidget {
       Text(
         label,
         style: TextStyle(
-          fontSize: bold ? 16 : 13,
-          fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+          fontSize: bold ? 18 : 14,
+          fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
           color: muted ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.onSurface,
         ),
       ),
       Text(
         value,
         style: TextStyle(
-          fontSize: bold ? 16 : 13,
-          fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+          fontSize: bold ? 18 : 14,
+          fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
           color: muted ? Theme.of(context).colorScheme.onSurfaceVariant : Theme.of(context).colorScheme.onSurface,
         ),
       ),
