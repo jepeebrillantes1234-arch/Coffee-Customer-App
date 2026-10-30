@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../core/api.dart';
@@ -9,11 +10,15 @@ import '../core/util.dart';
 import '../screens/auth_screen.dart';
 import 'rider_delivery_screen.dart';
 import 'rider_location_service.dart';
+import 'rider_map_utils.dart';
 import 'rider_profile_screen.dart';
 import 'rider_theme.dart';
 
 List<Map<String, dynamic>> _asList(dynamic value) => value is List
-    ? value.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+    ? value
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList()
     : <Map<String, dynamic>>[];
 
 class RiderHomeScreen extends StatefulWidget {
@@ -42,7 +47,10 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   void initState() {
     super.initState();
     _load();
-    _poll = Timer.periodic(const Duration(seconds: 15), (_) => _load(silent: true));
+    _poll = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _load(silent: true),
+    );
   }
 
   @override
@@ -63,11 +71,13 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       final active = _asList(activeResponse['items']);
       final previousStatus = <String, String>{
         for (final item in _active)
-          if (item['id'] != null) item['id'].toString(): item['status']?.toString() ?? '',
+          if (item['id'] != null)
+            item['id'].toString(): item['status']?.toString() ?? '',
       };
       final newAssignment = _hasLoadedOnce
           ? active.cast<Map<String, dynamic>?>().firstWhere(
-              (item) => item != null &&
+              (item) =>
+                  item != null &&
                   item['status'] == 'assigned' &&
                   previousStatus[item['id']?.toString()] != 'assigned',
               orElse: () => null,
@@ -113,7 +123,8 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _error = 'Could not load your rider dashboard. Pull down to try again.';
+          _error =
+              'Could not load your rider dashboard. Pull down to try again.';
           _loading = false;
         });
       }
@@ -134,10 +145,18 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Log out?'),
-        content: const Text('You will need to sign in again to manage deliveries.'),
+        content: const Text(
+          'You will need to sign in again to manage deliveries.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Log Out')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Log Out'),
+          ),
         ],
       ),
     );
@@ -155,7 +174,8 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       if (mounted) setState(() => _available = result);
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
       if (mounted) setState(() => _availabilityBusy = false);
@@ -181,19 +201,45 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     final review = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        icon: Icon(Icons.notifications_active_outlined, color: riderAccent(context)),
+        icon: Icon(
+          Icons.notifications_active_outlined,
+          color: riderAccent(context),
+        ),
         title: const Text('New Delivery Request'),
-        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(order['order_number']?.toString() ?? 'New order', style: const TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          Text(customer['name']?.toString() ?? 'Customer'),
-          Text(order['address']?.toString() ?? 'Address unavailable', maxLines: 3, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 8),
-          Text(peso(dbl(order['total'])), style: TextStyle(fontWeight: FontWeight.w800, color: riderAccent(context))),
-        ]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              order['order_number']?.toString() ?? 'New order',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(customer['name']?.toString() ?? 'Customer'),
+            Text(
+              order['address']?.toString() ?? 'Address unavailable',
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              peso(dbl(order['total'])),
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: riderAccent(context),
+              ),
+            ),
+          ],
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Later')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Review Request')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Later'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Review Request'),
+          ),
         ],
       ),
     );
@@ -204,7 +250,8 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     if (_profileOpening) return;
     _profileOpening = true;
     _scaffoldKey.currentState?.closeDrawer();
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RiderProfileScreen()));
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const RiderProfileScreen()));
     _profileOpening = false;
     if (mounted) setState(() => _tab = 0);
   }
@@ -231,27 +278,49 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
-        title: const Text('Rider Dashboard', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text(
+          'Rider Dashboard',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
         actions: [
-          IconButton(tooltip: 'Refresh', onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh_rounded)),
-          IconButton(tooltip: 'Profile settings', onPressed: _openProfile, icon: const Icon(Icons.account_circle_outlined)),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _loading ? null : _load,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          IconButton(
+            tooltip: 'Profile settings',
+            onPressed: _openProfile,
+            icon: const Icon(Icons.account_circle_outlined),
+          ),
         ],
       ),
       drawer: _buildDrawer(name, user),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: _buildPage(theme, name),
-            ),
+          : RefreshIndicator(onRefresh: _load, child: _buildPage(theme, name)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: _selectBottomTab,
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.delivery_dining_outlined), selectedIcon: Icon(Icons.delivery_dining), label: 'Deliveries'),
-          NavigationDestination(icon: Icon(Icons.history_rounded), label: 'History'),
-          NavigationDestination(icon: Icon(Icons.person_outline_rounded), label: 'Profile'),
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.delivery_dining_outlined),
+            selectedIcon: Icon(Icons.delivery_dining),
+            label: 'Deliveries',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.history_rounded),
+            label: 'History',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            label: 'Profile',
+          ),
         ],
       ),
     );
@@ -265,152 +334,567 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 20, 16, 18),
-          child: Row(children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: riderGreen.withValues(alpha: .12),
-              backgroundImage: avatar == null || avatar.isEmpty ? null : NetworkImage(avatar),
-              child: avatar == null || avatar.isEmpty ? const Icon(Icons.delivery_dining, color: riderGreen) : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-              const Text('Delivery Rider'),
-              const SizedBox(height: 5),
-              _OnlineBadge(online: _available),
-            ])),
-          ]),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: riderGreen.withValues(alpha: .12),
+                backgroundImage: avatar == null || avatar.isEmpty
+                    ? null
+                    : NetworkImage(avatar),
+                child: avatar == null || avatar.isEmpty
+                    ? const Icon(Icons.delivery_dining, color: riderGreen)
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const Text('Delivery Rider'),
+                    const SizedBox(height: 5),
+                    _OnlineBadge(online: _available),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         const Divider(),
-        const NavigationDrawerDestination(icon: Icon(Icons.home_outlined), label: Text('Home')),
-        const NavigationDrawerDestination(icon: Icon(Icons.delivery_dining_outlined), label: Text('My Deliveries')),
-        const NavigationDrawerDestination(icon: Icon(Icons.history_rounded), label: Text('Delivery History')),
-        const Padding(padding: EdgeInsets.fromLTRB(28, 20, 16, 8), child: Text('ACCOUNT', style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700))),
-        ListTile(leading: const Icon(Icons.settings_outlined), title: const Text('Profile Settings'), onTap: _openProfile),
-        ListTile(leading: const Icon(Icons.help_outline_rounded), title: const Text('Help & Support'), onTap: () => _showInfo('Help & Support', 'For delivery or account help, contact your coffee shop administrator.')),
-        ListTile(leading: const Icon(Icons.info_outline_rounded), title: const Text('About'), onTap: () => _showInfo('About', 'KJM Coffee Brew Rider\nDelivery partner app')),
+        const NavigationDrawerDestination(
+          icon: Icon(Icons.home_outlined),
+          label: Text('Home'),
+        ),
+        const NavigationDrawerDestination(
+          icon: Icon(Icons.delivery_dining_outlined),
+          label: Text('My Deliveries'),
+        ),
+        const NavigationDrawerDestination(
+          icon: Icon(Icons.history_rounded),
+          label: Text('Delivery History'),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(28, 20, 16, 8),
+          child: Text(
+            'ACCOUNT',
+            style: TextStyle(
+              fontSize: 11,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.settings_outlined),
+          title: const Text('Profile Settings'),
+          onTap: _openProfile,
+        ),
+        ListTile(
+          leading: const Icon(Icons.help_outline_rounded),
+          title: const Text('Help & Support'),
+          onTap: () => _showInfo(
+            'Help & Support',
+            'For delivery or account help, contact your coffee shop administrator.',
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.info_outline_rounded),
+          title: const Text('About'),
+          onTap: () =>
+              _showInfo('About', 'KJM Coffee Brew Rider\nDelivery partner app'),
+        ),
         const Divider(),
-        ListTile(leading: const Icon(Icons.logout_rounded, color: Colors.red), title: const Text('Log Out'), onTap: _logout),
+        ListTile(
+          leading: const Icon(Icons.logout_rounded, color: Colors.red),
+          title: const Text('Log Out'),
+          onTap: _logout,
+        ),
       ],
     );
   }
 
   Widget _buildPage(ThemeData theme, String name) {
-    if (_tab == 1) return _deliveryList(_active, 'No assigned deliveries yet. Stay online to receive new assignments.');
-    if (_tab == 2) return _deliveryList(_history, 'Completed and declined deliveries will appear here.');
+    if (_tab == 1) {
+      return _deliveryList(
+        _active,
+        'No assigned deliveries yet. Stay online to receive new assignments.',
+      );
+    }
+    if (_tab == 2) {
+      return _deliveryList(
+        _history,
+        'Completed and declined deliveries will appear here.',
+      );
+    }
     if (_tab == 3) {
-      return Center(child: FilledButton.icon(onPressed: _openProfile, icon: const Icon(Icons.settings), label: const Text('Open Profile Settings')));
+      return Center(
+        child: FilledButton.icon(
+          onPressed: _openProfile,
+          icon: const Icon(Icons.settings),
+          label: const Text('Open Profile Settings'),
+        ),
+      );
     }
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
       children: [
         if (_error != null) _errorBanner(_error!),
-        Text('Hello, $name', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, color: riderAccent(context))),
-        const SizedBox(height: 4),
-        Text('Here is your delivery overview.', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 16),
+        _welcomeCard(name),
+        const SizedBox(height: 14),
         _availabilityCard(),
         const SizedBox(height: 14),
-        Row(children: [
-          Expanded(child: _metric('Completed today', '${_summary['today'] ?? 0}', Icons.task_alt_rounded, const Color(0xFF228A60))),
-          const SizedBox(width: 10),
-          Expanded(child: _metric('Total deliveries', '${_summary['total_deliveries'] ?? 0}', Icons.local_shipping_outlined, const Color(0xFF287CC1))),
-        ]),
+        Row(
+          children: [
+            Expanded(
+              child: _metric(
+                'Completed today',
+                '${_summary['today'] ?? 0}',
+                Icons.task_alt_rounded,
+                const Color(0xFF228A60),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _metric(
+                'Total deliveries',
+                '${_summary['total_deliveries'] ?? 0}',
+                Icons.local_shipping_outlined,
+                theme.colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
-        Row(children: [
-          Expanded(child: _metric('Distance traveled', '${_summary['total_km'] ?? 0} km', Icons.route_rounded, const Color(0xFF8C57B7))),
-          const SizedBox(width: 10),
-          Expanded(child: _metric('Cash to remit', peso(dbl(_summary['cash_on_hand'])), Icons.payments_outlined, const Color(0xFFE49320))),
-        ]),
+        Row(
+          children: [
+            Expanded(
+              child: _metric(
+                'Distance traveled',
+                '${_summary['total_km'] ?? 0} km',
+                Icons.route_rounded,
+                theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _metric(
+                'Cash to remit',
+                peso(dbl(_summary['cash_on_hand'])),
+                Icons.payments_outlined,
+                theme.colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 18),
-        _sectionHeader('Current delivery', action: _active.isNotEmpty ? 'View all' : null, onAction: () => setState(() => _tab = 1)),
+        _sectionHeader(
+          'Current delivery',
+          action: _active.isNotEmpty ? 'View all' : null,
+          onAction: () => setState(() => _tab = 1),
+        ),
         if (_active.isNotEmpty) ...[
           const SizedBox(height: 10),
           _mapPreview(_active.first),
           const SizedBox(height: 10),
           _deliveryCard(_active.first),
         ] else
-          _emptyCard('No active delivery', _available ? 'You are online and ready for an assignment.' : 'Go online when you are ready to receive delivery assignments.', Icons.delivery_dining_rounded),
+          _emptyCard(
+            'No active delivery',
+            _available ? 'You are online and ready for an assignment.' : 'Go online when you are ready to receive delivery assignments.',
+            Icons.delivery_dining_rounded,
+          ),
         const SizedBox(height: 18),
-        _sectionHeader('Recent activity', action: _history.isNotEmpty ? 'History' : null, onAction: () => setState(() => _tab = 2)),
+        _sectionHeader(
+          'Recent activity',
+          action: _history.isNotEmpty ? 'History' : null,
+          onAction: () => setState(() => _tab = 2),
+        ),
         const SizedBox(height: 8),
         if (_history.isEmpty)
-          _emptyCard('No delivery history', 'Your completed deliveries will show here.', Icons.history_rounded)
+          _emptyCard(
+            'No delivery history',
+            'Your completed deliveries will show here.',
+            Icons.history_rounded,
+          )
         else
           ..._history.take(3).map(_deliveryCard),
       ],
     );
   }
 
-  Widget _availabilityCard() => Card(
-    color: _available ? riderGreen : Theme.of(context).colorScheme.surfaceContainerHighest,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(children: [
-        Icon(_available ? Icons.wifi_tethering_rounded : Icons.wifi_tethering_off_rounded, color: _available ? Colors.white : Theme.of(context).colorScheme.onSurfaceVariant),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_available ? 'You are online' : 'You are offline', style: TextStyle(color: _available ? Colors.white : null, fontWeight: FontWeight.w800, fontSize: 16)),
-          Text(_available ? 'Ready to receive delivery assignments' : 'Turn on availability when you are ready', style: TextStyle(color: _available ? Colors.white70 : Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
-        ])),
-        if (_availabilityBusy) const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)) else Switch(value: _available, onChanged: _toggleAvailable, activeThumbColor: Colors.white),
-      ]),
-    ),
-  );
-
-  Widget _metric(String label, String value, IconData icon, Color color) => Card(
-    child: Padding(padding: const EdgeInsets.all(13), child: Row(children: [
-      Container(width: 42, height: 42, decoration: BoxDecoration(color: color.withValues(alpha: .13), borderRadius: BorderRadius.circular(13)), child: Icon(icon, color: color)),
-      const SizedBox(width: 10),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)), Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant))])),
-    ])),
-  );
-
-  Widget _sectionHeader(String title, {String? action, VoidCallback? onAction}) => Row(children: [
-    Expanded(child: Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
-    if (action != null) TextButton(onPressed: onAction, child: Text(action)),
-  ]);
-
-  Widget _mapPreview(Map<String, dynamic> delivery) {
-    final order = delivery['order'] is Map ? Map<String, dynamic>.from(delivery['order'] as Map) : <String, dynamic>{};
-    final lat = double.tryParse('${order['lat'] ?? ''}');
-    final lng = double.tryParse('${order['lng'] ?? ''}');
-    if (lat == null || lng == null) {
-      return _emptyCard('Delivery map unavailable', 'The customer address does not include map coordinates.', Icons.map_outlined);
-    }
-    final point = LatLng(lat, lng);
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(height: 190, child: Stack(children: [
-        FlutterMap(
-          options: MapOptions(initialCenter: point, initialZoom: 14),
-          children: [
-            TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.kjmcoffeebrew.app'),
-            MarkerLayer(markers: [Marker(point: point, width: 44, height: 44, child: const Icon(Icons.location_on, color: riderGreen, size: 40))]),
-          ],
-        ),
-        Positioned(left: 12, right: 12, bottom: 12, child: FilledButton.icon(onPressed: () => _openDelivery(delivery), icon: const Icon(Icons.navigation_rounded), label: const Text('Open delivery'))),
-      ])),
+  Widget _welcomeCard(String name) {
+    final avatar = Api.I.user?['avatar_url']?.toString();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF176B67),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 27,
+            backgroundColor: Colors.white.withValues(alpha: .18),
+            backgroundImage: avatar == null || avatar.isEmpty
+                ? null
+                : NetworkImage(avatar),
+            child: avatar == null || avatar.isEmpty
+                ? const Icon(Icons.delivery_dining_rounded, color: Colors.white)
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Good day, $name',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Your delivery overview',
+                  style: TextStyle(color: Colors.white.withValues(alpha: .82)),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .16),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.circle,
+                  size: 8,
+                  color: _available ? const Color(0xFF8BF0BB) : Colors.white70,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _available ? 'ONLINE' : 'OFFLINE',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _deliveryList(List<Map<String, dynamic>> items, String empty) => ListView(
-    physics: const AlwaysScrollableScrollPhysics(),
-    padding: const EdgeInsets.all(16),
+  Widget _availabilityCard() => Card(
+    color: _available
+        ? riderGreen
+        : Theme.of(context).colorScheme.surfaceContainerHighest,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Icon(
+            _available
+                ? Icons.wifi_tethering_rounded
+                : Icons.wifi_tethering_off_rounded,
+            color: _available
+                ? Colors.white
+                : Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _available ? 'You are online' : 'You are offline',
+                  style: TextStyle(
+                    color: _available ? Colors.white : null,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  _available
+                      ? 'Ready to receive delivery assignments'
+                      : 'Turn on availability when you are ready',
+                  style: TextStyle(
+                    color: _available
+                        ? Colors.white70
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_availabilityBusy)
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            Switch(
+              value: _available,
+              onChanged: _toggleAvailable,
+              activeThumbColor: Colors.white,
+            ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _metric(String label, String value, IconData icon, Color color) =>
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(13),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: .13),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(icon, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17,
+                      ),
+                    ),
+                    Text(
+                      label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _sectionHeader(
+    String title, {
+    String? action,
+    VoidCallback? onAction,
+  }) => Row(
     children: [
-      if (_error != null) _errorBanner(_error!),
-      Text(_tab == 1 ? 'My Deliveries' : 'Delivery History', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-      const SizedBox(height: 4),
-      Text(_tab == 1 ? 'Manage your assigned orders and delivery steps.' : 'Review your recent delivery activity.', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-      const SizedBox(height: 12),
-      if (items.isEmpty) _emptyCard('Nothing here yet', empty, Icons.inbox_outlined) else ...items.map(_deliveryCard),
+      Expanded(
+        child: Text(
+          title,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        ),
+      ),
+      if (action != null) TextButton(onPressed: onAction, child: Text(action)),
     ],
   );
 
+  Widget _mapPreview(Map<String, dynamic> delivery) {
+    final order = delivery['order'] is Map
+        ? Map<String, dynamic>.from(delivery['order'] as Map)
+        : <String, dynamic>{};
+    final lat = double.tryParse('${order['lat'] ?? ''}');
+    final lng = double.tryParse('${order['lng'] ?? ''}');
+    if (lat == null || lng == null) {
+      return _emptyCard(
+        'Delivery map unavailable',
+        'The customer address does not include map coordinates.',
+        Icons.map_outlined,
+      );
+    }
+    final point = LatLng(lat, lng);
+    final route = routePointsFrom(delivery['route']);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        height: 210,
+        child: ValueListenableBuilder<Position?>(
+          valueListenable: LocationService.I.position,
+          builder: (context, position, _) {
+            final gpsPoint = position == null
+                ? null
+                : LatLng(position.latitude, position.longitude);
+            final riderPoint = nearestRoadPoint(gpsPoint, route) ?? gpsPoint;
+            return Stack(
+              children: [
+                FlutterMap(
+                  options: MapOptions(
+                    initialCenter:
+                        riderPoint ?? (route.isNotEmpty ? route.first : point),
+                    initialZoom: 14,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.kjmcoffeebrew.app',
+                    ),
+                    if (route.length > 1)
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: route,
+                            color: const Color(0xFF168A83),
+                            strokeWidth: 5,
+                          ),
+                        ],
+                      ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: point,
+                          width: 44,
+                          height: 44,
+                          child: const Icon(
+                            Icons.location_on_rounded,
+                            color: Color(0xFFD34A4A),
+                            size: 40,
+                          ),
+                        ),
+                        if (riderPoint != null)
+                          Marker(
+                            point: riderPoint,
+                            width: 44,
+                            height: 44,
+                            child: Container(
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF176B67),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.delivery_dining_rounded,
+                                color: Colors.white,
+                                size: 29,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+                Positioned(
+                  left: 12,
+                  top: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface
+                          .withValues(alpha: .95),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.circle,
+                          size: 9,
+                          color: Color(0xFF168A83),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          route.length > 1 ? 'RIDER LIVE' : 'CUSTOMER LOCATION',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: .4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 12,
+                  child: FilledButton.icon(
+                    onPressed: () => _openDelivery(delivery),
+                    icon: const Icon(Icons.navigation_rounded),
+                    label: const Text('Open delivery'),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _deliveryList(List<Map<String, dynamic>> items, String empty) =>
+      ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (_error != null) _errorBanner(_error!),
+          Text(
+            _tab == 1 ? 'My Deliveries' : 'Delivery History',
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _tab == 1
+                ? 'Manage your assigned orders and delivery steps.'
+                : 'Review your recent delivery activity.',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (items.isEmpty)
+            _emptyCard('Nothing here yet', empty, Icons.inbox_outlined)
+          else
+            ...items.map(_deliveryCard),
+        ],
+      );
+
   Widget _deliveryCard(Map<String, dynamic> delivery) {
-    final order = delivery['order'] is Map ? Map<String, dynamic>.from(delivery['order'] as Map) : <String, dynamic>{};
-    final customer = delivery['customer'] is Map ? Map<String, dynamic>.from(delivery['customer'] as Map) : <String, dynamic>{};
+    final order = delivery['order'] is Map
+        ? Map<String, dynamic>.from(delivery['order'] as Map)
+        : <String, dynamic>{};
+    final customer = delivery['customer'] is Map
+        ? Map<String, dynamic>.from(delivery['customer'] as Map)
+        : <String, dynamic>{};
     final status = delivery['status']?.toString() ?? 'assigned';
     final scheme = Theme.of(context).colorScheme;
     return Card(
@@ -418,39 +902,146 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => _openDelivery(delivery),
-        child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [Expanded(child: Text(order['order_number']?.toString() ?? 'Delivery', style: const TextStyle(fontWeight: FontWeight.w800))), _OnlineBadge(online: status == 'on_the_way', label: deliveryStatusLabel(status))]),
-          const SizedBox(height: 10),
-          Row(children: [const Icon(Icons.person_outline, size: 18), const SizedBox(width: 6), Expanded(child: Text(customer['name']?.toString() ?? 'Customer'))]),
-          const SizedBox(height: 5),
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const Icon(Icons.location_on_outlined, size: 18), const SizedBox(width: 6), Expanded(child: Text(order['address']?.toString() ?? 'Address unavailable', maxLines: 2, overflow: TextOverflow.ellipsis))]),
-          const SizedBox(height: 10),
-          Row(children: [Text(peso(dbl(order['total'])), style: TextStyle(color: riderAccent(context), fontWeight: FontWeight.w800)), const SizedBox(width: 8), Text((order['payment_method']?.toString() ?? 'payment').toUpperCase(), style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11)), const Spacer(), const Icon(Icons.chevron_right_rounded)]),
-        ])),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      order['order_number']?.toString() ?? 'Delivery',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  _OnlineBadge(
+                    online: status == 'on_the_way',
+                    label: deliveryStatusLabel(status),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Icon(Icons.person_outline, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(customer['name']?.toString() ?? 'Customer'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.location_on_outlined, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      order['address']?.toString() ?? 'Address unavailable',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text(
+                    peso(dbl(order['total'])),
+                    style: TextStyle(
+                      color: riderAccent(context),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    (order['payment_method']?.toString() ?? 'payment')
+                        .toUpperCase(),
+                    style: TextStyle(
+                      color: scheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.chevron_right_rounded),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _emptyCard(String title, String subtitle, IconData icon) => Card(
-    child: Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24), child: Column(children: [
-      Icon(icon, size: 38, color: Theme.of(context).colorScheme.onSurfaceVariant),
-      const SizedBox(height: 8),
-      Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-      const SizedBox(height: 4),
-      Text(subtitle, textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-    ])),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            size: 38,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 8),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    ),
   );
 
   Widget _errorBanner(String text) => Container(
     margin: const EdgeInsets.only(bottom: 12),
     padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(color: Theme.of(context).colorScheme.errorContainer, borderRadius: BorderRadius.circular(12)),
-    child: Row(children: [Icon(Icons.error_outline, color: Theme.of(context).colorScheme.onErrorContainer), const SizedBox(width: 8), Expanded(child: Text(text, style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer)))]),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.errorContainer,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      children: [
+        Icon(
+          Icons.error_outline,
+          color: Theme.of(context).colorScheme.onErrorContainer,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onErrorContainer,
+            ),
+          ),
+        ),
+      ],
+    ),
   );
 
   void _showInfo(String title, String body) {
     Navigator.pop(context);
-    showDialog<void>(context: context, builder: (context) => AlertDialog(title: Text(title), content: Text(body), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))]));
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -461,11 +1052,34 @@ class _OnlineBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = online ? const Color(0xFF228A60) : Theme.of(context).colorScheme.onSurfaceVariant;
+    final color = online
+        ? const Color(0xFF228A60)
+        : Theme.of(context).colorScheme.onSurfaceVariant;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(color: color.withValues(alpha: .12), borderRadius: BorderRadius.circular(20)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)), const SizedBox(width: 5), Text(label ?? (online ? 'Online' : 'Offline'), style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700))]),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label ?? (online ? 'Online' : 'Offline'),
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

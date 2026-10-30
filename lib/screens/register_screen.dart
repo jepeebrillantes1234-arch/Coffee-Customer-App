@@ -66,9 +66,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   OutlineInputBorder _border(Color color) => OutlineInputBorder(
-        borderRadius: BorderRadius.circular(15),
-        borderSide: BorderSide(color: color),
-      );
+    borderRadius: BorderRadius.circular(15),
+    borderSide: BorderSide(color: color),
+  );
 
   InputDecoration _dec(String label, IconData icon, {Widget? suffix}) =>
       InputDecoration(
@@ -131,7 +131,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Text(
                       'Sign up to start ordering your coffee.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                     const SizedBox(height: 24),
                     TextFormField(
@@ -139,7 +141,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       textCapitalization: TextCapitalization.words,
                       textInputAction: TextInputAction.next,
                       decoration: _dec('Full name', Icons.person_outline),
-                      validator: (value) => value == null || value.trim().isEmpty
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
                           ? 'Please enter your name.'
                           : null,
                     ),
@@ -179,7 +182,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _phone,
                       keyboardType: TextInputType.phone,
                       textInputAction: TextInputAction.next,
-                      decoration: _dec('Phone (optional)', Icons.phone_outlined),
+                      decoration: _dec(
+                        'Phone (optional)',
+                        Icons.phone_outlined,
+                      ),
                     ),
                     const SizedBox(height: 14),
                     TextFormField(
@@ -190,9 +196,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         'Password (at least 8 characters)',
                         Icons.lock_outline,
                         suffix: IconButton(
-                          onPressed: () => setState(
-                            () => _hidePassword = !_hidePassword,
-                          ),
+                          onPressed: () =>
+                              setState(() => _hidePassword = !_hidePassword),
                           icon: Icon(
                             _hidePassword
                                 ? Icons.visibility_outlined
@@ -242,12 +247,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                       ),
                       child: _busy
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.white,
+                                color: Theme.of(context).colorScheme.onPrimary,
                               ),
                             )
                           : const Text(
@@ -260,10 +265,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       onPressed: _busy
                           ? null
                           : () => Navigator.of(context).pushReplacement(
-                                MaterialPageRoute(
-                                  builder: (_) => const AuthScreen(),
-                                ),
+                              MaterialPageRoute(
+                                builder: (_) => const AuthScreen(),
                               ),
+                            ),
                       child: const Text('Already have an account? Log in'),
                     ),
                   ],

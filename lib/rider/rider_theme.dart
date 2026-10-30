@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 /// Rider theme accent color.
-const riderGreen = Color(0xFF1F3D2F);
+const riderGreen = Color(0xFF176B67);
 
 Color riderAccent(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF79C9A2)
-        : riderGreen;
+    ? const Color(0xFF75D3C8)
+    : riderGreen;
 
 String deliveryStatusLabel(String s) {
   switch (s) {

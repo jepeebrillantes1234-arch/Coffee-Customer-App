@@ -63,7 +63,7 @@ class PromoBannerCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius - 2),
         child: Material(
-          color: const Color(0xFF5B3A26),
+          color: const Color(0xFF111111),
           child: InkWell(
             onTap: onTap,
             child: Stack(
@@ -76,7 +76,7 @@ class PromoBannerCard extends StatelessWidget {
                   Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Color(0xFF9A6A3A), Color(0xFF5B3A26)],
+                        colors: [Color(0xFF383838), Color(0xFF111111)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -203,13 +203,13 @@ class PromoBannerCard extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
-                                    color: selected ? Colors.white : const Color(0xFF4B2E2B),
+                                    color: selected ? Colors.white : const Color(0xFF111111),
                                   ),
                                 ),
                                 Icon(
                                   selected ? Icons.check : Icons.chevron_right,
                                   size: 16,
-                                  color: selected ? Colors.white : const Color(0xFF4B2E2B),
+                                  color: selected ? Colors.white : const Color(0xFF111111),
                                 ),
                               ],
                             ),

@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
 
-import '../core/theme.dart';  
 import '../core/util.dart';
 import 'trackorder_screen.dart';
 
@@ -258,7 +257,8 @@ class _PaymentScreenState extends State<PaymentScreen>
                   border: Border.all(color: Theme.of(context).dividerColor),
                   boxShadow: [
                     BoxShadow(
-                      color: Theme.of(context).colorScheme.shadow.withValues(alpha: .08),
+                      color: Theme.of(context).colorScheme.shadow
+                          .withValues(alpha: .08),
                       blurRadius: 14,
                       offset: const Offset(0, 5),
                     ),
@@ -285,7 +285,9 @@ class _PaymentScreenState extends State<PaymentScreen>
             Text(
               '${_order['order_number']}',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 18),
             Card(
@@ -296,10 +298,10 @@ class _PaymentScreenState extends State<PaymentScreen>
                     const Text('Amount due'),
                     Text(
                       peso(dbl(_order['total'])),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.w800,
-                        color: caramel,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const Divider(height: 24),
@@ -308,7 +310,9 @@ class _PaymentScreenState extends State<PaymentScreen>
                           ? 'The payment window has expired'
                           : 'Payment expires in $_timeText',
                       style: TextStyle(
-                        color: expired ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: expired
+                            ? Theme.of(context).colorScheme.error
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -318,18 +322,21 @@ class _PaymentScreenState extends State<PaymentScreen>
             const SizedBox(height: 14),
             Text(
               '1. Open the secure QRPh checkout.\n2. Scan the QR code with a QRPh-enabled wallet or banking app.\n3. Return here. We will verify your payment automatically.\n\nThe shop will receive your order after payment is confirmed.',
-              style: TextStyle(height: 1.5, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              style: TextStyle(
+                height: 1.5,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 18),
             FilledButton(
               onPressed: _busy ? null : (expired ? null : _payAgain),
               child: _busy
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 22,
                       height: 22,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onPrimary,
                       ),
                     )
                   : const Text('Open QRPh Checkout'),

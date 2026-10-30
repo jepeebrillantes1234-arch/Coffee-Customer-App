@@ -62,7 +62,7 @@ class NetImage extends StatelessWidget {
     final placeholder = Container(
       height: height,
       width: width,
-      color: Colors.brown.shade100,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
       alignment: Alignment.center,
       child: const Text('☕', style: TextStyle(fontSize: 32)),
     );

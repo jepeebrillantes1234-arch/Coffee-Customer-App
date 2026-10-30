@@ -32,6 +32,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String? _error;
   bool _quoting = false;
   bool _placing = false;
+  bool _addressChosenByCustomer = false;
   int _quoteSeq = 0;
 
   @override
@@ -39,7 +40,38 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.initState();
     if (AppState.online) _paymentMethod = 'qrph';
     _promo.text = SelectedPromo.I.code ?? ''; // Automatic code from Home
-    _refresh();
+    _loadDefaultDeliveryAddress();
+  }
+
+  Future<void> _loadDefaultDeliveryAddress() async {
+    try {
+      final saved = await Api.I.addresses();
+      if (!mounted) return;
+      Map<String, dynamic>? address;
+      for (final item in saved) {
+        if (item['is_default'] == true || item['is_default'] == 1) {
+          address = item;
+          break;
+        }
+      }
+      address ??= saved.isEmpty ? null : saved.first;
+      final selectedAddress = address;
+      if (selectedAddress != null && !_addressChosenByCustomer) {
+        final latitude = double.tryParse('${selectedAddress['latitude']}');
+        final longitude = double.tryParse('${selectedAddress['longitude']}');
+        if (latitude != null && longitude != null) {
+          setState(() {
+            _pin = LatLng(latitude, longitude);
+            _address.text =
+                '${selectedAddress['formatted_address'] ?? selectedAddress['full_address'] ?? ''}';
+            _locationName.text = '${selectedAddress['label'] ?? ''}';
+          });
+        }
+      }
+    } on ApiException {
+      // Continue checkout with the existing manual address selection flow.
+    }
+    if (mounted) await _refresh();
   }
 
   @override
@@ -111,6 +143,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
     setState(() {
+      _addressChosenByCustomer = true;
       _pin = LatLng(latitude, longitude);
       _address.text =
           '${selected['formatted_address'] ?? selected['full_address'] ?? ''}';
@@ -327,7 +360,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               : Icons.radio_button_checked,
                           color: _paymentMethod == 'qrph'
                               ? Theme.of(context).colorScheme.onSurfaceVariant
-                              : espresso,
+                              : Theme.of(context).colorScheme.primary,
                           size: 19,
                         ),
                       ),
@@ -557,12 +590,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ),
                   ),
                   child: _placing
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 21,
                           height: 21,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : Text(
@@ -602,7 +635,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           style: TextStyle(
             fontWeight: bold ? FontWeight.w700 : null,
             fontSize: bold ? 17 : null,
-            color: color ?? (bold ? caramel : null),
+            color:
+                color ??
+                (bold ? Theme.of(context).colorScheme.onSurface : null),
           ),
         ),
       ],

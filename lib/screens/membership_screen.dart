@@ -457,15 +457,15 @@ class _MembershipScreenState extends State<MembershipScreen>
                 vertical: height * .008,
               ),
               decoration: BoxDecoration(
-                color: const Color(0xFF4A210B),
-                border: Border.all(color: const Color(0xFFFFD77A), width: 1.2),
+                color: const Color(0xFF111111),
+                border: Border.all(color: Colors.white, width: 1.2),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
                 status,
                 maxLines: 1,
                 style: TextStyle(
-                  color: const Color(0xFFFFE3A0),
+                  color: Colors.white,
                   fontWeight: FontWeight.w900,
                   letterSpacing: .8,
                   fontSize: 11 * scale,
@@ -493,7 +493,7 @@ class _MembershipScreenState extends State<MembershipScreen>
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: const Color(0xFFFFE6AE),
+                      color: Colors.white,
                       fontWeight: FontWeight.w900,
                       fontSize: 17 * scale,
                       shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
@@ -515,7 +515,7 @@ class _MembershipScreenState extends State<MembershipScreen>
                     '${_active ? _points : 0} POINTS',
                     maxLines: 1,
                     style: TextStyle(
-                      color: const Color(0xFFFFD477),
+                      color: Colors.white,
                       fontSize: 13 * scale,
                       fontWeight: FontWeight.w900,
                     ),
@@ -556,7 +556,7 @@ class _MembershipScreenState extends State<MembershipScreen>
                   )
                 : Icon(
                     Icons.lock_outline_rounded,
-                    color: const Color(0xFF603516),
+                    color: Colors.black,
                     size: width * .07,
                   ),
           ),
@@ -579,7 +579,7 @@ class _MembershipScreenState extends State<MembershipScreen>
       fallbackAsset,
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => const ColoredBox(
-        color: Color(0xFFF3E4C8),
+        color: Color(0xFFF5F5F5),
         child: Center(child: Icon(Icons.credit_card_rounded, size: 48)),
       ),
     );

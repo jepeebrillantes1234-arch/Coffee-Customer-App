@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
 import '../core/reverse_geocoder.dart';
@@ -47,9 +48,32 @@ class _AddressesScreenState extends State<AddressesScreen> {
   Future<void> _delete(Map<String, dynamic> address) async {
     final id = int.tryParse('${address['id']}');
     if (id == null) return;
+    final label = '${address['label'] ?? 'this address'}';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete saved address?'),
+        content: Text('Remove "$label" from your saved addresses?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep address'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     try {
       await Api.I.deleteAddress(id);
       await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Address removed.')));
+      }
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -137,30 +161,33 @@ class _AddressesScreenState extends State<AddressesScreen> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    subtitle: fullAddress.isNotEmpty && label != fullAddress
-                        ? Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          )
-                        : null,
-                    trailing: widget.selectionMode
-                        ? const Icon(Icons.chevron_right_rounded)
-                        : Wrap(
-                            spacing: 0,
-                            children: [
-                              IconButton(
-                                tooltip: 'Edit address',
-                                icon: const Icon(Icons.edit_outlined),
-                                onPressed: () => _edit(address),
-                              ),
-                              IconButton(
-                                tooltip: 'Delete address',
-                                icon: const Icon(Icons.delete_outline),
-                                onPressed: () => _delete(address),
-                              ),
-                            ],
-                          ),
+                    subtitle: Text(
+                      [
+                        label,
+                        if (address['is_default'] == true ||
+                            address['is_default'] == 1)
+                          'Default',
+                      ].join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: Wrap(
+                      spacing: 0,
+                      children: [
+                        if (widget.selectionMode)
+                          const Icon(Icons.chevron_right_rounded),
+                        IconButton(
+                          tooltip: 'Edit address',
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: () => _edit(address),
+                        ),
+                        IconButton(
+                          tooltip: 'Delete address',
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => _delete(address),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
@@ -190,17 +217,16 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
   final _longitude = TextEditingController();
   bool _locating = false;
   bool _saving = false;
+  bool _isDefault = false;
   bool _resolving = false;
-  String? _locationMessage;
   int _resolveSequence = 0;
-  bool _fullAddressEdited = false;
-  bool _structuredAddressEdited = false;
 
   @override
   void initState() {
     super.initState();
     final address = widget.address;
     if (address != null) {
+      _isDefault = address['is_default'] == true || address['is_default'] == 1;
       _label.text = '${address['label'] ?? ''}';
       _fullAddress.text =
           '${address['formatted_address'] ?? address['full_address'] ?? ''}';
@@ -211,7 +237,29 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
       _postalCode.text = '${address['postal_code'] ?? ''}';
       _latitude.text = '${address['latitude'] ?? ''}';
       _longitude.text = '${address['longitude'] ?? ''}';
+      _syncFullAddressPreview();
     }
+  }
+
+  String _composeFullAddress() {
+    final parts = <String>[
+      _street.text.trim(),
+      _barangay.text.trim(),
+      _city.text.trim(),
+      _province.text.trim(),
+      _postalCode.text.trim(),
+    ].where((part) => part.isNotEmpty);
+    final uniqueParts = <String>[];
+    final seen = <String>{};
+    for (final part in parts) {
+      final key = part.toLowerCase();
+      if (seen.add(key)) uniqueParts.add(part);
+    }
+    return uniqueParts.join(', ');
+  }
+
+  void _syncFullAddressPreview() {
+    _fullAddress.text = _composeFullAddress();
   }
 
   @override
@@ -237,16 +285,10 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
     try {
       final place = await ReverseGeocoder.resolve(latitude, longitude);
       if (!mounted || sequence != _resolveSequence) return;
-      if (place == null) {
-        setState(() {
-          _locationMessage = 'GPS pin saved, but a readable address could not be found. Enter the address manually; the coordinates are retained.';
-          if (_label.text.trim().isEmpty) _label.text = 'Current location';
-        });
-        return;
-      }
+      if (place == null) return;
       setState(() {
-        // Do not replace details the customer has already entered. Fill each
-        // structured field only when it is still blank.
+        // GPS-derived fields stay editable, and only fill fields the customer
+        // has not already entered so a later lookup cannot replace corrections.
         if (_street.text.trim().isEmpty) _street.text = place.street;
         if (_barangay.text.trim().isEmpty) _barangay.text = place.barangay;
         if (_city.text.trim().isEmpty) _city.text = place.city;
@@ -254,11 +296,7 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
         if (_postalCode.text.trim().isEmpty) {
           _postalCode.text = place.postalCode;
         }
-        if (_fullAddress.text.trim().isEmpty) _fullAddress.text = place.address;
-        if (_label.text.trim().isEmpty || _label.text == 'Current location') {
-          _label.text = place.name;
-        }
-        _locationMessage = '${String.fromCharCode(0x1F4CD)} ${place.address}';
+        _syncFullAddressPreview();
       });
     } finally {
       if (mounted && sequence == _resolveSequence) {
@@ -296,7 +334,6 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
   Future<void> _useGps() async {
     setState(() {
       _locating = true;
-      _locationMessage = null;
     });
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
@@ -347,7 +384,6 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
         // editable controllers so saving an address does not round the pin.
         _latitude.text = position.latitude.toStringAsFixed(7);
         _longitude.text = position.longitude.toStringAsFixed(7);
-        _locationMessage = 'GPS pin acquired. Finding the place name...';
       });
       await _lookupCurrentCoordinates(position.latitude, position.longitude);
     } catch (error) {
@@ -373,21 +409,16 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
     }
   }
 
+  Future<void> _openOpenStreetMapAttribution() async {
+    await launchUrl(
+      Uri.https('www.openstreetmap.org', '/copyright'),
+      mode: LaunchMode.externalApplication,
+    );
+  }
+
   Future<void> _save() async {
     final label = _label.text.trim();
-    final structuredParts = [
-      _street.text.trim(),
-      _barangay.text.trim(),
-      _city.text.trim(),
-      _province.text.trim(),
-      _postalCode.text.trim(),
-    ].where((part) => part.isNotEmpty).toList();
-    final structuredAddress = structuredParts.join(', ');
-    final fullAddress =
-        _fullAddressEdited ||
-            (!_structuredAddressEdited && _fullAddress.text.trim().isNotEmpty)
-        ? _fullAddress.text.trim()
-        : structuredAddress;
+    final fullAddress = _composeFullAddress();
     final latitude = double.tryParse(_latitude.text.trim());
     final longitude = double.tryParse(_longitude.text.trim());
     if (label.isEmpty ||
@@ -401,7 +432,7 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Enter a location name, full address, and valid coordinates. Use GPS to fill in coordinates.',
+            'Enter a location name, at least one address detail, and valid coordinates. Use GPS to fill in coordinates.',
           ),
         ),
       );
@@ -423,6 +454,7 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
           province: _province.text.trim(),
           postalCode: _postalCode.text.trim(),
           formattedAddress: fullAddress,
+          isDefault: _isDefault,
         );
       } else {
         await Api.I.updateAddress(
@@ -437,6 +469,7 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
           province: _province.text.trim(),
           postalCode: _postalCode.text.trim(),
           formattedAddress: fullAddress,
+          isDefault: _isDefault,
         );
       }
       if (mounted) Navigator.of(context).pop(true);
@@ -475,25 +508,33 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
                 textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(
                   labelText: 'Location name',
-                  hintText: 'Home, Work, or another name',
+                  hintText: 'Required, e.g. Home, Work, Church',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.bookmark_outline),
                 ),
+              ),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: _isDefault,
+                onChanged: _saving
+                    ? null
+                    : (value) => setState(() => _isDefault = value),
+                title: const Text('Use as default delivery address'),
+                secondary: const Icon(Icons.star_outline_rounded),
               ),
               const SizedBox(height: 14),
               TextField(
                 controller: _fullAddress,
                 minLines: 3,
                 maxLines: 5,
-                textCapitalization: TextCapitalization.words,
+                readOnly: true,
                 decoration: const InputDecoration(
-                  labelText: 'Full address',
-                  hintText: 'House/street, barangay, city, province, country',
+                  labelText: 'Full delivery address preview',
+                  hintText: 'Enter address details below to build the preview',
                   border: OutlineInputBorder(),
                   alignLabelWithHint: true,
                   prefixIcon: Icon(Icons.location_on_outlined),
                 ),
-                onChanged: (_) => _fullAddressEdited = true,
               ),
               const SizedBox(height: 14),
               TextField(
@@ -504,7 +545,7 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.signpost_outlined),
                 ),
-                onChanged: (_) => _structuredAddressEdited = true,
+                onChanged: (_) => _syncFullAddressPreview(),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -515,7 +556,7 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.location_city_outlined),
                 ),
-                onChanged: (_) => _structuredAddressEdited = true,
+                onChanged: (_) => _syncFullAddressPreview(),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -525,7 +566,7 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
                   labelText: 'City / Municipality',
                   border: OutlineInputBorder(),
                 ),
-                onChanged: (_) => _structuredAddressEdited = true,
+                onChanged: (_) => _syncFullAddressPreview(),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -535,7 +576,7 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
                   labelText: 'Province',
                   border: OutlineInputBorder(),
                 ),
-                onChanged: (_) => _structuredAddressEdited = true,
+                onChanged: (_) => _syncFullAddressPreview(),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -545,7 +586,7 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
                   labelText: 'Postal code (optional)',
                   border: OutlineInputBorder(),
                 ),
-                onChanged: (_) => _structuredAddressEdited = true,
+                onChanged: (_) => _syncFullAddressPreview(),
               ),
               const SizedBox(height: 16),
               OutlinedButton.icon(
@@ -563,32 +604,24 @@ class _AddressFormScreenState extends State<_AddressFormScreen> {
                       : 'Use current GPS location',
                 ),
               ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: _openOpenStreetMapAttribution,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: const Text(
+                    'Location data © OpenStreetMap contributors',
+                  ),
+                ),
+              ),
               if (_resolving) ...[
                 const SizedBox(height: 8),
                 const LinearProgressIndicator(minHeight: 2),
                 const SizedBox(height: 4),
                 const Text('Finding the address...'),
-              ],
-              if (_locationMessage != null && !_resolving) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.location_on_outlined,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(_locationMessage!)),
-                    ],
-                  ),
-                ),
               ],
               const SizedBox(height: 10),
               ExpansionTile(

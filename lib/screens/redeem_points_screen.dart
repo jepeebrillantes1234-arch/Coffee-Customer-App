@@ -427,14 +427,10 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
     padding: const EdgeInsets.all(22),
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(22),
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF291710), Color(0xFF56331F), Color(0xFF754A2C)],
-      ),
+      color: Theme.of(context).colorScheme.primary,
       boxShadow: [
         BoxShadow(
-          color: const Color(0xFF3E2518).withValues(alpha: 0.2),
+          color: Colors.black.withValues(alpha: 0.08),
           blurRadius: 18,
           offset: const Offset(0, 8),
         ),
@@ -446,15 +442,15 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
           width: 54,
           height: 54,
           decoration: BoxDecoration(
-            color: const Color(0xFFFFD990).withValues(alpha: 0.16),
+            color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(17),
             border: Border.all(
-              color: const Color(0xFFFFD990).withValues(alpha: 0.35),
+              color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.3),
             ),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.stars_rounded,
-            color: Color(0xFFFFD990),
+            color: Theme.of(context).colorScheme.onPrimary,
             size: 30,
           ),
         ),
@@ -463,10 +459,10 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'AVAILABLE POINTS',
                 style: TextStyle(
-                  color: Color(0xFFEBD3B0),
+                  color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.75),
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1.3,
@@ -475,23 +471,23 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
               const SizedBox(height: 3),
               Text(
                 '$_points',
-                style: const TextStyle(
-                  color: Color(0xFFFFE5B2),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onPrimary,
                   fontSize: 34,
                   height: 1.05,
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              const Text(
+              Text(
                 'points to enjoy your next reward',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
+                style: TextStyle(color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.75), fontSize: 12),
               ),
             ],
           ),
         ),
-        const Icon(
+        Icon(
           Icons.local_cafe_rounded,
-          color: Color(0xFFFFD990),
+          color: Theme.of(context).colorScheme.onPrimary,
           size: 27,
         ),
       ],
@@ -500,13 +496,13 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
 
   Widget _membershipStatusCard() {
     final active = _active;
-    final accent = active ? const Color(0xFF347451) : const Color(0xFF9B6126);
+    final accent = active ? Colors.green.shade700 : Theme.of(context).colorScheme.primary;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF9EF),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE9D6B9)),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Row(
         children: [
@@ -529,9 +525,9 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
               children: [
                 Text(
                   active ? 'Membership active' : 'Activate your membership',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFF352219),
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -539,9 +535,9 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
                   active
                       ? 'You can redeem available rewards.'
                       : 'An active membership is needed to redeem points.',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: Color(0xFF78675A),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -553,7 +549,7 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
               child: const Text('View'),
             )
           else
-            const Icon(Icons.check_circle_rounded, color: Color(0xFF347451)),
+            Icon(Icons.check_circle_rounded, color: Colors.green.shade700),
         ],
       ),
     );
@@ -564,10 +560,10 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
     children: [
       Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.w900,
-          color: Color(0xFF3B2419),
+          color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
       const SizedBox(height: 3),
@@ -589,27 +585,27 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
     width: double.infinity,
     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
     decoration: BoxDecoration(
-      color: const Color(0xFFFFF9EF),
+      color: Theme.of(context).colorScheme.surface,
       borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: const Color(0xFFE9D6B9)),
+      border: Border.all(color: Theme.of(context).dividerColor),
     ),
     child: Column(
       children: [
-        Icon(icon, size: 38, color: const Color(0xFFB88A52)),
+        Icon(icon, size: 38, color: Theme.of(context).colorScheme.primary),
         const SizedBox(height: 10),
         Text(
           title,
           textAlign: TextAlign.center,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.w800,
-            color: Color(0xFF3B2419),
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 5),
         Text(
           message,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: Color(0xFF78675A), fontSize: 13),
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
         ),
       ],
     ),
@@ -624,7 +620,7 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
     return Card(
       clipBehavior: Clip.antiAlias,
       elevation: 2,
-      shadowColor: const Color(0xFF4B3020).withValues(alpha: 0.12),
+      shadowColor: Colors.black.withValues(alpha: 0.08),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -634,12 +630,12 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
               fit: StackFit.expand,
               children: [
                 if (image == null || image.isEmpty)
-                  const ColoredBox(
-                    color: Color(0xFFF1E6DA),
+                  ColoredBox(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     child: Icon(
                       Icons.coffee_rounded,
                       size: 42,
-                      color: Color(0xFF7B573D),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   )
                 else
@@ -658,16 +654,16 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
                       vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF382116).withValues(alpha: 0.92),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.92),
                       borderRadius: BorderRadius.circular(99),
                       border: Border.all(
-                        color: const Color(0xFFFFD990).withValues(alpha: 0.75),
+                        color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.75),
                       ),
                     ),
                     child: Text(
                       '$cost points',
-                      style: const TextStyle(
-                        color: Color(0xFFFFE4AF),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimary,
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
                       ),
@@ -687,10 +683,10 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
                     _productName(reward),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w900,
-                      color: Color(0xFF352219),
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -701,10 +697,10 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
                           .toString(),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         height: 1.3,
-                        color: Color(0xFF78675A),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -738,16 +734,16 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
   Widget _stockBadge(dynamic stock, bool inStock) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
-      color: inStock ? const Color(0xFFF7E7C8) : const Color(0xFFFCE8E5),
+      color: inStock ? Colors.green.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(99),
       border: Border.all(
-        color: inStock ? const Color(0xFFD9B879) : const Color(0xFFE9B6AE),
+        color: inStock ? Colors.green.shade200 : Colors.red.shade200,
       ),
     ),
     child: Text(
       stock == null ? 'In stock' : (inStock ? 'Stock: $stock' : 'Out of stock'),
       style: TextStyle(
-        color: inStock ? const Color(0xFF69481F) : const Color(0xFF9B342A),
+        color: inStock ? Colors.green.shade800 : Colors.red.shade800,
         fontSize: 11,
         fontWeight: FontWeight.w800,
       ),
@@ -770,12 +766,12 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF5E7D1),
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(13),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.redeem_rounded,
-                    color: Color(0xFF76502F),
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -784,9 +780,9 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
                     '${row['reward_name'] ?? 'Redeemed product'}',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF352219),
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -836,7 +832,7 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
 
   Widget _historyStatus(String status) {
     final cancelled = status.toLowerCase() == 'cancelled';
-    final color = cancelled ? const Color(0xFF8E3830) : const Color(0xFF2F704E);
+    final color = cancelled ? Colors.red.shade700 : Colors.green.shade700;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
@@ -858,20 +854,20 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
     constraints: const BoxConstraints(maxWidth: 270),
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
     decoration: BoxDecoration(
-      color: const Color(0xFFFFF9EF),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(10),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: const Color(0xFF8D6945)),
+        Icon(icon, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
         const SizedBox(width: 5),
         Flexible(
           child: Text(
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11, color: Color(0xFF594639)),
+            style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
       ],

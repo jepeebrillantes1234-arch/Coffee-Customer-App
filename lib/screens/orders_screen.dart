@@ -123,7 +123,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
             child: const Text('Keep order'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
             onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Remove'),
           ),
@@ -245,7 +248,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   filter,
                                   style: TextStyle(
                                     color: selected
-                                        ? Colors.white
+                                        ? Theme.of(context)
+                                              .colorScheme
+                                              .onPrimary
                                         : Theme.of(context)
                                               .colorScheme
                                               .onSurface,
@@ -264,7 +269,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
                                     color: selected
-                                        ? Colors.white24
+                                        ? Theme.of(context)
+                                              .colorScheme
+                                              .onPrimary
+                                              .withValues(alpha: .16)
                                         : _countColor(
                                             filter,
                                             context,
@@ -275,7 +283,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                     '${_count(filter)}',
                                     style: TextStyle(
                                       color: selected
-                                          ? Colors.white
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .onPrimary
                                           : _countColor(filter, context),
                                       fontSize: 11,
                                       fontWeight: FontWeight.w800,
@@ -319,10 +329,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       child: Center(
                         child: Column(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.receipt_long_rounded,
                               size: 48,
-                              color: Color(0xFFB8A89B),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                             ),
                             const SizedBox(height: 12),
                             Text(
@@ -350,12 +362,46 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Color _countColor(String filter, BuildContext context) => switch (filter) {
-    'Completed' => const Color(0xFF2D9A5F),
-    'Cancelled' => const Color(0xFFE64444),
-    'Pending' => const Color(0xFF737B83),
-    _ => Theme.of(context).colorScheme.primary,
-  };
+  Color _countColor(String filter, BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return switch (filter) {
+      'Completed' => dark ? const Color(0xFF90D5A2) : const Color(0xFF26713C),
+      'Cancelled' => scheme.error,
+      'Pending' => scheme.onSurfaceVariant,
+      _ => scheme.primary,
+    };
+  }
+
+  Color _statusBadgeForeground(String status, BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    if (status == 'awaiting_payment' || status == 'pending') {
+      return dark ? const Color(0xFFFFD66B) : const Color(0xFF765000);
+    }
+    if (status == 'confirmed' || status == 'preparing') {
+      return dark ? const Color(0xFFFFC17B) : const Color(0xFF8C4300);
+    }
+    if (status == 'ready' ||
+        status == 'rider_assigned' ||
+        status == 'picked_up') {
+      return dark ? const Color(0xFFB8C7FF) : const Color(0xFF324E9B);
+    }
+    if (status == 'on_the_way') {
+      return dark ? const Color(0xFFD4B1E8) : const Color(0xFF713E8F);
+    }
+    if (status == 'delivered' || status == 'completed') {
+      return dark ? const Color(0xFF90D5A2) : const Color(0xFF26713C);
+    }
+    if (status == 'cancelled' || status == 'rejected') {
+      return Theme.of(context).colorScheme.error;
+    }
+    return Theme.of(context).colorScheme.onSurfaceVariant;
+  }
+
+  Color _statusBadgeBackground(String status, BuildContext context) =>
+      _statusBadgeForeground(status, context).withValues(
+        alpha: Theme.of(context).brightness == Brightness.dark ? .18 : .12,
+      );
 
   Widget _orderCard(Map<String, dynamic> order) {
     final status = '${order['status'] ?? ''}';
@@ -363,7 +409,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
       status,
       '${order['order_type'] ?? 'delivery'}',
     );
-    final color = statusColor(status);
+    final badgeForeground = _statusBadgeForeground(status, context);
+    final badgeBackground = _statusBadgeBackground(status, context);
     final image = _imageFor(order);
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -379,7 +426,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             border: Border.all(color: Theme.of(context).dividerColor),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x0D382416),
+                color: Color(0x0D000000),
                 blurRadius: 14,
                 offset: Offset(0, 5),
               ),
@@ -469,7 +516,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: color,
+                        color: badgeBackground,
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: Row(
@@ -477,7 +524,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         children: [
                           Icon(
                             _statusIcon(status),
-                            color: Colors.white,
+                            color: badgeForeground,
                             size: 14,
                           ),
                           const SizedBox(width: 4),
@@ -487,7 +534,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: Colors.white,
+                                color: badgeForeground,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -518,9 +565,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   TextButton.icon(
                     style: TextButton.styleFrom(
                       foregroundColor: Theme.of(context).colorScheme.error,
-                      backgroundColor: Theme.of(context)
-                          .colorScheme
-                          .errorContainer,
+                      backgroundColor: Theme.of(context).colorScheme.error
+                          .withValues(
+                            alpha:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? .18
+                                : .10,
+                          ),
                       padding: const EdgeInsets.symmetric(horizontal: 7),
                       minimumSize: const Size(0, 28),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,

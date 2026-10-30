@@ -591,7 +591,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                   colors: [
-                    Color(0xCC160C08),
+                    Color(0xCC000000),
                     Color(0x66000000),
                     Color(0x00000000),
                   ],
@@ -764,7 +764,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             height: 56,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Colors.white,
+                              color: Theme.of(context).colorScheme.surface,
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withValues(alpha: 0.12),
@@ -804,7 +804,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               height: 64,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.white,
+                                color: Theme.of(context).colorScheme.surface,
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: 0.12),
@@ -955,16 +955,22 @@ class _HomeScreenState extends State<HomeScreen> {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary,
+                          color: bestSeller
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.error,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           bestSeller ? 'Best Seller' : 'SALE',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style:
+                              const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ).copyWith(
+                                color: bestSeller
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Theme.of(context).colorScheme.onError,
+                              ),
                         ),
                       ),
                     ),

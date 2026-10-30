@@ -119,9 +119,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } else if (avatarUrl.isNotEmpty) {
       photo = NetImage(avatarUrl, width: 112, height: 112);
     } else {
-      photo = const ColoredBox(
-        color: Color(0xFFF3E7D5),
-        child: Icon(Icons.person_rounded, size: 54, color: Color(0xFF775536)),
+      photo = ColoredBox(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: Icon(Icons.person_rounded, size: 54, color: Theme.of(context).colorScheme.primary),
       );
     }
 
@@ -134,7 +134,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFC99A55), width: 2),
+              border: Border.all(color: Theme.of(context).colorScheme.primary, width: 2),
             ),
             child: ClipOval(child: SizedBox.expand(child: photo)),
           ),
@@ -144,10 +144,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             icon: const Icon(Icons.add_a_photo_outlined, size: 18),
             label: const Text('Change Photo'),
           ),
-          const Text(
+          Text(
             'Choose an image from your gallery or camera',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF79695C), fontSize: 12),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
           ),
         ],
       ),
@@ -171,9 +171,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   Container(
                     padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF9EF),
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: const Color(0xFFE9D6B9)),
+                      border: Border.all(color: Theme.of(context).dividerColor),
                     ),
                     child: _photoPreview(),
                   ),
@@ -298,8 +298,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     padding: const EdgeInsets.only(bottom: 7),
     child: Text(
       label,
-      style: const TextStyle(
-        color: Color(0xFF4B3020),
+      style: TextStyle(
+        color: Theme.of(context).colorScheme.onSurface,
         fontWeight: FontWeight.w700,
       ),
     ),

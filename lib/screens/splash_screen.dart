@@ -14,15 +14,19 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   /// Total duration of the splash. Adjust as needed.
   static const _duration = Duration(milliseconds: 3600);
 
-  static const _gold = Color(0xFFFFD49A);
-  static const _caramel = Color(0xFFC8843C);
-  static const _cream = Color(0xFFF7F2EB);
+  static const _gold = Color(0xFFFFFFFF);
+  static const _caramel = Color(0xFFFFFFFF);
+  static const _cream = Color(0xFFFFFFFF);
 
-  late final AnimationController _c = AnimationController(vsync: this, duration: _duration);
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: _duration,
+  );
   Future<void>? _precache;
   bool _leaving = false;
 
@@ -65,7 +69,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 600),
         pageBuilder: (_, _, _) => widget.nextScreen,
-        transitionsBuilder: (_, animation, _, child) => FadeTransition(opacity: animation, child: child),
+        transitionsBuilder: (_, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
       ),
     );
   }
@@ -88,14 +93,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             'assets/images/splash.png',
             fit: BoxFit.cover,
             filterQuality: FilterQuality.high,
-            errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFF32190F)),
+            errorBuilder: (_, _, _) =>
+                const ColoredBox(color: Color(0xFF111111)),
           ),
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0x55170A05), Color(0xCC170A05)],
+                colors: [Color(0x55000000), Color(0xCC000000)],
               ),
             ),
           ),
@@ -148,7 +154,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               height: 170,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [_gold.withValues(alpha: 0.40), Colors.transparent]),
+                gradient: RadialGradient(
+                  colors: [_gold.withValues(alpha: 0.18), Colors.transparent],
+                ),
               ),
             ),
           ),
@@ -164,14 +172,21 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.white,
-                    boxShadow: [BoxShadow(color: _gold.withValues(alpha: 0.55), blurRadius: 28, spreadRadius: 2)],
+                    boxShadow: [
+                      BoxShadow(
+                        color: _gold.withValues(alpha: 0.55),
+                        blurRadius: 28,
+                        spreadRadius: 2,
+                      ),
+                    ],
                   ),
                   child: ClipOval(
                     child: Image.asset(
                       'assets/images/logo1.png',
                       fit: BoxFit.cover,
                       cacheWidth: 360,
-                      errorBuilder: (_, _, _) => const Icon(Icons.coffee, size: 60, color: _caramel),
+                      errorBuilder: (_, _, _) =>
+                          const Icon(Icons.coffee, size: 60, color: _caramel),
                     ),
                   ),
                 ),
@@ -193,7 +208,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       child: Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _gold, width: 2)),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: _gold, width: 2),
+        ),
       ),
     );
   }
@@ -205,7 +223,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var i = 0; i < letters.length; i++)
-          _letter(letters[i], _t(0.28 + i * 0.07, 0.50 + i * 0.07, Curves.easeOutBack)),
+          _letter(
+            letters[i],
+            _t(0.28 + i * 0.07, 0.50 + i * 0.07, Curves.easeOutBack),
+          ),
       ],
     );
   }
@@ -241,7 +262,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             padding: EdgeInsets.symmetric(horizontal: 10),
             child: Text(
               'COFFEE SHOP',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _gold, letterSpacing: 3.5),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _gold,
+                letterSpacing: 3.5,
+              ),
             ),
           ),
         ),
@@ -259,7 +285,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         child: const Text(
           'Good Coffee\nBetter Days',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 20, color: Color(0xFFE6DFD5), height: 1.3, letterSpacing: 0.8),
+          style: TextStyle(
+            fontSize: 20,
+            color: Color(0xFFF5F5F5),
+            height: 1.3,
+            letterSpacing: 0.8,
+          ),
         ),
       ),
     );
@@ -274,10 +305,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     final msg = p < 0.30
         ? 'Brewing coffee...'
         : p < 0.65
-            ? 'Fetching menu...'
-            : p < 0.97
-                ? 'Almost done...'
-                : 'Ready!';
+        ? 'Fetching menu...'
+        : p < 0.97
+        ? 'Almost done...'
+        : 'Ready!';
 
     return Opacity(
       opacity: show,
@@ -289,16 +320,32 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             Row(
               children: [
                 Expanded(
-                  child: Text(msg, style: TextStyle(fontSize: 13, color: _gold.withValues(alpha: 0.95), letterSpacing: 0.4)),
+                  child: Text(
+                    msg,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: _gold.withValues(alpha: 0.95),
+                      letterSpacing: 0.4,
+                    ),
+                  ),
                 ),
-                Text('$percent%', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _cream)),
+                Text(
+                  '$percent%',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: _cream,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
             LayoutBuilder(
               builder: (_, box) {
                 final w = box.maxWidth;
-                final tipLeft = (w * p - 14) < 0 ? 0.0 : ((w * p - 14) > w - 28 ? w - 28 : (w * p - 14));
+                final tipLeft = (w * p - 14) < 0
+                    ? 0.0
+                    : ((w * p - 14) > w - 28 ? w - 28 : (w * p - 14));
                 return SizedBox(
                   height: 30,
                   child: Stack(
@@ -318,9 +365,16 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                         height: 10,
                         width: w * p,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [_gold, _caramel]),
+                          gradient: const LinearGradient(
+                            colors: [_gold, _caramel],
+                          ),
                           borderRadius: BorderRadius.circular(10),
-                          boxShadow: [BoxShadow(color: _caramel.withValues(alpha: 0.65), blurRadius: 10)],
+                          boxShadow: [
+                            BoxShadow(
+                              color: _caramel.withValues(alpha: 0.65),
+                              blurRadius: 10,
+                            ),
+                          ],
                         ),
                       ),
                       // Coffee cup moving along the bar
@@ -333,9 +387,18 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                             shape: BoxShape.circle,
                             color: Colors.white,
                             border: Border.all(color: _caramel, width: 2),
-                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 6)],
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.3),
+                                blurRadius: 6,
+                              ),
+                            ],
                           ),
-                          child: const Icon(Icons.coffee, size: 15, color: Color(0xFF4B2E2B)),
+                          child: const Icon(
+                            Icons.coffee,
+                            size: 15,
+                            color: Color(0xFF111111),
+                          ),
                         ),
                       ),
                     ],

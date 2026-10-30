@@ -78,10 +78,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 alignment: Alignment.center,
-                child: const Icon(
+                child: Icon(
                   Icons.edit_rounded,
                   size: 19,
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                 ),
               ),
             ),

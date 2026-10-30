@@ -29,7 +29,7 @@ class CartScreen extends StatelessWidget {
                   Icon(
                     Icons.shopping_bag_outlined,
                     size: 54,
-                    color: Color(0xFFB6AAA0),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                   SizedBox(height: 12),
                   Text(

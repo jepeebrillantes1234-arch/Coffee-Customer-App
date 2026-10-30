@@ -141,7 +141,9 @@ class _MenuScreenState extends State<MenuScreen> {
                         fontWeight: FontWeight.w600,
                       ),
                       selectedColor: Theme.of(context).colorScheme.primary,
-                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest,
                       shape: const StadiumBorder(),
                       side: BorderSide.none,
                       padding: const EdgeInsets.symmetric(
@@ -279,7 +281,7 @@ Widget productCard(BuildContext context, Map<String, dynamic> p) {
         border: Border.all(color: Theme.of(context).dividerColor),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x0D392517),
+            color: Color(0x0D000000),
             blurRadius: 12,
             offset: Offset(0, 4),
           ),
@@ -301,7 +303,8 @@ Widget productCard(BuildContext context, Map<String, dynamic> p) {
                     builder: (_, _) {
                       final fav = Favorites.I.has(p['id'] as int);
                       return Material(
-                        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
+                        color: Theme.of(context).colorScheme.surface
+                            .withValues(alpha: 0.94),
                         shape: const CircleBorder(),
                         child: InkWell(
                           customBorder: const CircleBorder(),
@@ -314,7 +317,9 @@ Widget productCard(BuildContext context, Map<String, dynamic> p) {
                                   ? Icons.favorite_rounded
                                   : Icons.favorite_border_rounded,
                               size: 23,
-                              color: fav ? const Color(0xFFE76565) : Theme.of(context).colorScheme.primary,
+                              color: fav
+                                  ? const Color(0xFFE76565)
+                                  : Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ),

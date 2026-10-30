@@ -37,7 +37,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     });
   }
 
-
   @override
   void dispose() {
     _liveSubscription?.cancel();
@@ -186,7 +185,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         leading: IconButton(
           tooltip: 'Back',
           onPressed: () => Navigator.of(context).maybePop(),
-          icon: Icon(Icons.arrow_back_rounded, color: Theme.of(context).colorScheme.primary, size: 28),
+          icon: Icon(
+            Icons.arrow_back_rounded,
+            color: Theme.of(context).colorScheme.primary,
+            size: 28,
+          ),
         ),
         titleSpacing: 0,
         title: Column(
@@ -204,7 +207,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               'Stay updated with your orders and activities',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 12,
+              ),
             ),
           ],
         ),
@@ -241,15 +247,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         Center(
                           child: Column(
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.notifications_none_rounded,
                                 size: 48,
-                                color: Color(0xFFB8A89B),
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                               ),
                               const SizedBox(height: 12),
                               Text(
                                 _error ?? 'No notifications yet.',
-                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
                               ),
                             ],
                           ),
@@ -267,7 +279,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  Widget _notificationCard(BuildContext context, Map<String, dynamic> notification) {
+  Widget _notificationCard(
+    BuildContext context,
+    Map<String, dynamic> notification,
+  ) {
     final status = _status(notification);
     final color = _statusColor(status, context);
     final data = notification['data'];
@@ -291,7 +306,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             border: Border.all(color: Theme.of(context).dividerColor),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x0B382416),
+                color: Color(0x0B000000),
                 blurRadius: 12,
                 offset: Offset(0, 4),
               ),
@@ -351,7 +366,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                               fontSize: 11,
                             ),
                           ),

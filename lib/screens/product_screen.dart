@@ -179,7 +179,11 @@ class _ProductScreenState extends State<ProductScreen> {
         leading: IconButton(
           tooltip: 'Back',
           onPressed: () => Navigator.of(context).maybePop(),
-          icon: Icon(Icons.arrow_back_rounded, color: Theme.of(context).colorScheme.primary, size: 28),
+          icon: Icon(
+            Icons.arrow_back_rounded,
+            color: Theme.of(context).colorScheme.primary,
+            size: 28,
+          ),
         ),
         titleSpacing: 0,
         title: Text(
@@ -252,9 +256,13 @@ class _ProductScreenState extends State<ProductScreen> {
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceContainerLow,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerLow,
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: Theme.of(context).dividerColor),
+                          border: Border.all(
+                            color: Theme.of(context).dividerColor,
+                          ),
                         ),
                         child: TextField(
                           controller: _notes,
@@ -294,9 +302,13 @@ class _ProductScreenState extends State<ProductScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
                           decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surfaceContainerLow,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerLow,
                             borderRadius: BorderRadius.circular(32),
-                            border: Border.all(color: Theme.of(context).dividerColor),
+                            border: Border.all(
+                              color: Theme.of(context).dividerColor,
+                            ),
                           ),
                           child: Row(
                             children: [
@@ -333,7 +345,9 @@ class _ProductScreenState extends State<ProductScreen> {
                           child: FilledButton(
                             style: FilledButton.styleFrom(
                               minimumSize: const Size.fromHeight(56),
-                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .primary,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(32),
                               ),
@@ -405,7 +419,9 @@ class _ProductScreenState extends State<ProductScreen> {
           if (items.isEmpty)
             Text(
               'No reviews yet.',
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           for (final it in items)
             Card(
@@ -430,7 +446,9 @@ class _ProductScreenState extends State<ProductScreen> {
                           '${it['date']}',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -487,7 +505,11 @@ class _ProductScreenState extends State<ProductScreen> {
                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 21),
+                child: Icon(
+                  icon,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 21,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -514,7 +536,9 @@ class _ProductScreenState extends State<ProductScreen> {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: g['is_required'] == true ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: g['is_required'] == true
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -542,15 +566,19 @@ class _ProductScreenState extends State<ProductScreen> {
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
-          color: selected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
+          color: selected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: selected ? Theme.of(context).colorScheme.primary : Theme.of(context).dividerColor,
+            color: selected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).dividerColor,
           ),
           boxShadow: selected
               ? const [
                   BoxShadow(
-                    color: Color(0x1F512D1C),
+                    color: Color(0x1F000000),
                     blurRadius: 6,
                     offset: Offset(0, 2),
                   ),
@@ -561,13 +589,19 @@ class _ProductScreenState extends State<ProductScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (selected) ...[
-              Icon(Icons.check_rounded, color: Theme.of(context).colorScheme.onPrimary, size: 17),
+              Icon(
+                Icons.check_rounded,
+                color: Theme.of(context).colorScheme.onPrimary,
+                size: 17,
+              ),
               const SizedBox(width: 5),
             ],
             Text(
               '${option['name']}',
               style: TextStyle(
-                color: selected ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
+                color: selected
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -576,7 +610,9 @@ class _ProductScreenState extends State<ProductScreen> {
               Text(
                 '+${peso(extra)}',
                 style: TextStyle(
-                  color: selected ? Colors.white : caramel,
+                  color: selected
+                      ? Theme.of(context).colorScheme.onPrimary
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w700,
                 ),
               ),

@@ -538,6 +538,7 @@ class Api {
     String province = '',
     String postalCode = '',
     String? formattedAddress,
+    bool? isDefault,
   }) async {
     await _call(
       'PUT',
@@ -553,6 +554,7 @@ class Api {
         'postal_code': postalCode,
         'latitude': lat,
         'longitude': lng,
+        'is_default': ?isDefault,
       },
     );
   }

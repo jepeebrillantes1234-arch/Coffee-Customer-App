@@ -15,6 +15,7 @@ import '../state/nav.dart';
 import 'order_contents_screen.dart';
 import 'payment_screen.dart';
 import 'rider_chat_screen.dart';
+import 'customer_service_sheet.dart';
 
 String _timeTextInManila(dynamic value) {
   final raw = value?.toString().trim() ?? '';
@@ -61,7 +62,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   StreamSubscription<Map<String, dynamic>>? _liveSubscription;
   Timer? _trackingTimer;
   bool _refreshing = false;
-  bool _fullMapOpen = false;
   final MapController _mapController = MapController();
   int _rating = 5;
   final _comment = TextEditingController();
@@ -74,13 +74,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _startTrackingPolling();
     Realtime.I.connect();
     _liveSubscription = Realtime.I.updates.listen((event) {
-      if (!_fullMapOpen &&
-          const {
-            'order',
-            'delivery',
-            'payment',
-            'rider',
-          }.contains(event['kind'])) {
+      if (const {
+        'order',
+        'delivery',
+        'payment',
+        'rider',
+      }.contains(event['kind'])) {
         _load(silent: true);
       }
     });
@@ -162,109 +161,143 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _cancel() async {
-    if (_busy || _o?['can_cancel'] != true) return;
+    if (_busy || _o?['status'] != 'pending' || _o?['can_cancel'] != true) {
+      return;
+    }
     final reasonController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    const cancellationReasons = [
+      'Change Address',
+      'Change Payment Method',
+      'Wrong Order',
+      'Others',
+    ];
+    String? selectedReason;
     String? reason;
     try {
       reason = await showDialog<String>(
         context: context,
-        builder: (ctx) => Dialog(
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 24,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 460),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 58,
-                        height: 58,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.errorContainer,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.free_cancellation_rounded,
-                          color: Theme.of(context).colorScheme.error,
-                          size: 29,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Cancel this order?',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 21,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Are you sure you want to cancel this order?',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    TextFormField(
-                      controller: reasonController,
-                      minLines: 3,
-                      maxLines: 5,
-                      maxLength: 255,
-                      textCapitalization: TextCapitalization.sentences,
-                      textInputAction: TextInputAction.newline,
-                      decoration: const InputDecoration(
-                        labelText: 'Cancellation reason',
-                        hintText: 'Tell us why you need to cancel',
-                        alignLabelWithHint: true,
-                        prefixIcon: Padding(
-                          padding: EdgeInsets.only(bottom: 42),
-                          child: Icon(Icons.chat_bubble_outline_rounded),
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDialogState) => Dialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 58,
+                          height: 58,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.errorContainer,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.free_cancellation_rounded,
+                            color: Theme.of(context).colorScheme.error,
+                            size: 29,
+                          ),
                         ),
                       ),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Please enter a reason for cancellation.'
-                          : null,
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: () {
-                        if (formKey.currentState?.validate() ?? false) {
-                          Navigator.pop(ctx, reasonController.text.trim());
-                        }
-                      },
-                      icon: const Icon(Icons.cancel_outlined),
-                      label: const Text('Yes, Cancel Order'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.error,
-                        foregroundColor: Theme.of(context).colorScheme.onError,
-                        minimumSize: const Size.fromHeight(50),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Cancel this order?',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Are you sure you want to cancel this order?',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                      child: const Text('Keep My Order'),
-                    ),
-                  ],
+                      const SizedBox(height: 20),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedReason,
+                        decoration: const InputDecoration(
+                          labelText: 'Reason for cancellation',
+                          prefixIcon: Icon(Icons.chat_bubble_outline_rounded),
+                        ),
+                        items: cancellationReasons
+                            .map(
+                              (value) => DropdownMenuItem(
+                                value: value,
+                                child: Text(value),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) =>
+                            setDialogState(() => selectedReason = value),
+                        validator: (value) => value == null
+                            ? 'Please choose a cancellation reason.'
+                            : null,
+                      ),
+                      if (selectedReason == 'Others') ...[
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: reasonController,
+                          minLines: 2,
+                          maxLines: 4,
+                          maxLength: 240,
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: const InputDecoration(
+                            labelText: 'Please explain',
+                            alignLabelWithHint: true,
+                          ),
+                          validator: (value) =>
+                              selectedReason == 'Others' &&
+                                  (value == null || value.trim().isEmpty)
+                              ? 'Please explain your reason.'
+                              : null,
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: () {
+                          if (formKey.currentState?.validate() ?? false) {
+                            final submittedReason = selectedReason == 'Others'
+                                ? 'Others: ${reasonController.text.trim()}'
+                                : selectedReason!;
+                            Navigator.pop(ctx, submittedReason);
+                          }
+                        },
+                        icon: const Icon(Icons.cancel_outlined),
+                        label: const Text('Yes, Cancel Order'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.error,
+                          foregroundColor: Theme.of(context)
+                              .colorScheme
+                              .onError,
+                          minimumSize: const Size.fromHeight(50),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                        child: const Text('Keep My Order'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -350,54 +383,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
-  Future<void> _openRiderMap(
-    Map<String, dynamic> order,
-    Map<String, dynamic> tracking,
-    String address,
-  ) async {
-    _trackingTimer?.cancel();
-    _fullMapOpen = true;
-    try {
-      final finalTracking = await showDialog<Map<String, dynamic>>(
-        context: context,
-        builder: (_) => Dialog.fullscreen(
-          child: _LiveRiderMap(
-            orderId: widget.id,
-            orderNumber: '${order['order_number'] ?? 'Order'}',
-            address: address,
-            initialTracking: tracking,
-          ),
-        ),
-      );
-      if (finalTracking != null && mounted) {
-        final finalOrder = finalTracking['order'];
-        setState(() {
-          if (finalOrder is Map) _o = Map<String, dynamic>.from(finalOrder);
-          _t = _withoutLiveTracking(finalTracking);
-        });
-        _trackingTimer?.cancel();
-        _trackingTimer = null;
-        await _liveSubscription?.cancel();
-        _liveSubscription = null;
-      }
-    } finally {
-      _fullMapOpen = false;
-      if (mounted) {
-        if (mounted && !_isTrackingFinished()) {
-          _startTrackingPolling();
-        }
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final o = _o;
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: Theme.of(context).colorScheme.surface
+            .withValues(alpha: .94),
         foregroundColor: Theme.of(context).colorScheme.onSurface,
+        elevation: 0,
         automaticallyImplyLeading: false,
         leading: IconButton(
           tooltip: 'Back',
@@ -413,12 +409,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ),
         title: const Text('Order Tracking'),
         actions: [
-          if (!_isTrackingFinished())
-            IconButton(
-              tooltip: 'Rider chat and customer support',
-              onPressed: _openRiderChat,
-              icon: const Icon(Icons.chat_bubble_outline_rounded),
-            ),
+          IconButton(
+            tooltip: 'Customer support',
+            onPressed: () => showCustomerServiceSheet(context),
+            icon: const Icon(Icons.support_agent_rounded),
+          ),
         ],
       ),
       body: _loading
@@ -541,554 +536,623 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         : -1;
     final address = (o['delivery_address'] ?? dest['address'] ?? '').toString();
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '${o['order_number'] ?? 'Order'}',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            Text(
-              isDelivery && _isActiveDeliveryStatus(status)
-                  ? 'Live delivery tracking'
-                  : _statusText(status, type),
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
+        Positioned.fill(
+          child: _trackingMapBackground(
+            isDelivery: isDelivery,
+            isTerminal: isTerminal,
+            destinationPoint: destinationPoint,
+            shopPoint: shopPoint,
+            riderPoint: riderPoint,
+            routePoints: routePoints,
+            mapPoints: points,
+            address: address,
+          ),
         ),
-        const SizedBox(height: 14),
-        if (isDelivery && !isTerminal) ...[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(22),
-            child: SizedBox(
-              height: (MediaQuery.sizeOf(context).height * 0.36)
-                  .clamp(300.0, 420.0)
-                  .toDouble(),
-              child: destinationPoint == null
-                  ? _mapPlaceholder(address)
-                  : Stack(
-                      children: [
-                        FlutterMap(
-                          mapController: _mapController,
-                          options: MapOptions(
-                            initialCenter: riderPoint ?? destinationPoint,
-                            initialZoom: 15,
-                            initialCameraFit: points.length > 1
-                                ? CameraFit.bounds(
-                                    bounds: LatLngBounds.fromPoints(points),
-                                    padding: const EdgeInsets.all(52),
-                                    maxZoom: 16,
-                                  )
-                                : null,
-                          ),
-                          children: [
-                            TileLayer(
-                              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                              userAgentPackageName: 'com.kjmcoffeebrew.app',
-                            ),
-                            if (routePoints.length > 1)
-                              PolylineLayer(
-                                polylines: [
-                                  Polyline(
-                                    points: routePoints,
-                                    color: caramel,
-                                    strokeWidth: 6,
-                                    borderColor: Colors.white,
-                                    borderStrokeWidth: 2,
-                                  ),
-                                ],
+        if (isDelivery && !isTerminal && destinationPoint != null)
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + kToolbarHeight + 8,
+            right: 14,
+            child: _routeMapBadge(
+              context,
+              live: isLive,
+              updatedAt: lastLocationAt,
+              eta: routeMinutes,
+              distance: routeKm,
+              error: routeData['error']?.toString(),
+            ),
+          ),
+        if (isDelivery &&
+            !isTerminal &&
+            riderPoint != null &&
+            destinationPoint != null)
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + kToolbarHeight + 62,
+            left: 14,
+            child: _riderDistanceBadge(context, riderPoint, destinationPoint),
+          ),
+        if (isDelivery && destinationPoint != null)
+          Positioned(
+            right: 14,
+            top: MediaQuery.sizeOf(context).height * .28,
+            child: _trackingMapControls(
+              riderPoint ?? destinationPoint,
+              riderPoint != null,
+            ),
+          ),
+        DraggableScrollableSheet(
+          initialChildSize: .48,
+          minChildSize: .28,
+          maxChildSize: .94,
+          snap: true,
+          snapSizes: const [.48, .94],
+          builder: (context, scrollController) => Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface
+                  .withValues(alpha: .98),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(26),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .16),
+                  blurRadius: 18,
+                  offset: const Offset(0, -5),
+                ),
+              ],
+            ),
+            child: ListView(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 9, 16, 28),
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${o['order_number'] ?? 'Order'}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      isDelivery && _isActiveDeliveryStatus(status)
+                          ? 'Live delivery tracking'
+                          : _statusText(status, type),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                if (isDelivery && !isTerminal)
+                  Card(
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 26,
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest,
+                                foregroundImage:
+                                    rider?['avatar_url'] != null &&
+                                        '${rider?['avatar_url']}'.isNotEmpty
+                                    ? NetworkImage(
+                                        fixUrl('${rider?['avatar_url']}'),
+                                      )
+                                    : null,
+                                child:
+                                    rider?['avatar_url'] == null ||
+                                        '${rider?['avatar_url']}'.isEmpty
+                                    ? Icon(
+                                        Icons.delivery_dining_rounded,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        size: 28,
+                                      )
+                                    : null,
                               ),
-                            MarkerLayer(
-                              markers: [
-                                if (shopPoint != null)
-                                  Marker(
-                                    point: shopPoint,
-                                    width: 42,
-                                    height: 48,
-                                    child: _mapPin(
-                                      Icons.storefront_rounded,
-                                      caramel,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${rider?['name'] ?? 'Waiting for rider'}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      rider == null
+                                          ? 'A rider will be assigned when your order is ready.'
+                                          : rider['role']?.toString() ??
+                                                'Delivery rider',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
+                                    ),
+                                    if (riderPhone.isNotEmpty)
+                                      Text(
+                                        riderPhone,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                        ),
+                                      ),
+                                    if (riderPoint != null)
+                                      Text(
+                                        isLive
+                                            ? 'Live location · updated ${_timeTextInManila(rider?['last_updated_at'])}'
+                                            : 'Last location · ${lastLocationAt == null ? 'waiting for update' : _timeTextInManila(lastLocationAt.toUtc().toIso8601String())}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: isLive
+                                              ? Colors.green.shade700
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: riderPhone.isEmpty
+                                      ? null
+                                      : () => _contactRider(riderPhone),
+                                  icon: const Icon(
+                                    Icons.call_rounded,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Call'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: FilledButton.tonalIcon(
+                                  onPressed: _openRiderChat,
+                                  icon: const Icon(
+                                    Icons.chat_bubble_outline_rounded,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Rider Chat'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                Card(
+                  elevation: 1,
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            if (isDelivery)
+                              Image.asset(
+                                'assets/images/delivery.png',
+                                width: 48,
+                                height: 48,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, _, _) => Icon(
+                                  Icons.delivery_dining_rounded,
+                                  color: Theme.of(context).colorScheme.primary,
+                                  size: 34,
+                                ),
+                              )
+                            else
+                              Icon(
+                                Icons.storefront_rounded,
+                                color: Theme.of(context).colorScheme.primary,
+                                size: 34,
+                              ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    status == 'cancelled'
+                                        ? 'Your order has been cancelled'
+                                        : status == 'rejected'
+                                        ? 'Your order was rejected'
+                                        : isDelivered
+                                        ? 'Your order has been delivered!'
+                                        : isOnRoute
+                                        ? 'Your order is on the way!'
+                                        : status == 'pending'
+                                        ? 'Waiting for shop confirmation'
+                                        : 'Your order is being prepared',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                Marker(
-                                  point: destinationPoint,
-                                  width: 42,
-                                  height: 48,
-                                  child: _mapPin(Icons.home_rounded, espresso),
-                                ),
-                                if (riderPoint != null)
-                                  Marker(
-                                    point: riderPoint,
-                                    width: 76,
-                                    height: 60,
-                                    child: _deliveryMapMarker(context),
-                                  ),
-                              ],
+                                  const SizedBox(height: 3),
+                                  Text(_statusText(status, type)),
+                                ],
+                              ),
                             ),
-                            RichAttributionWidget(
-                              attributions: [
-                                TextSourceAttribution(
-                                  'OpenStreetMap contributors',
+                            if (routeMinutes != null && isOnRoute)
+                              Text(
+                                '~$routeMinutes min',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
-                                TextSourceAttribution('Route via OSRM'),
-                              ],
-                            ),
+                              ),
                           ],
                         ),
-                        if (riderPoint != null)
-                          Positioned(
-                            top: 12,
-                            left: 12,
-                            child: _riderDistanceBadge(
-                              riderPoint,
-                              destinationPoint,
-                            ),
-                          ),
-                        Positioned(
-                          top: 12,
-                          right: 12,
-                          child: _routeMapBadge(
-                            context,
-                            live: isLive,
-                            updatedAt: lastLocationAt,
-                            eta: routeMinutes,
-                            distance: routeKm,
-                            error: routeData['error']?.toString(),
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 12,
-                          right: 12,
-                          child: Material(
-                            color: Theme.of(context).colorScheme.surface,
-                            shape: const CircleBorder(),
-                            elevation: 3,
-                            child: IconButton(
-                              tooltip: 'Recenter map',
-                              onPressed: () {
-                                final focus = riderPoint ?? destinationPoint;
-                                _mapController.move(focus, 15);
-                              },
-                              icon: const Icon(Icons.my_location_rounded),
-                            ),
-                          ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            for (var step = 0; step < 4; step++) ...[
+                              Expanded(
+                                child: _trackingStep(
+                                  const [
+                                    'Confirmed',
+                                    'Preparing',
+                                    'Ready',
+                                    'Delivered',
+                                  ][step],
+                                  step,
+                                  currentStep,
+                                  isCurrent:
+                                      (isOnRoute && step == 2) ||
+                                      step == currentStep,
+                                ),
+                              ),
+                              if (step < 3)
+                                _progressLine(
+                                  step < currentStep
+                                      ? 1
+                                      : isOnRoute && step == 2
+                                      ? .45
+                                      : 0,
+                                ),
+                            ],
+                          ],
                         ),
                       ],
                     ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: destinationPoint == null
-                  ? null
-                  : () => _openRiderMap(o, t, address),
-              icon: const Icon(Icons.map_outlined),
-              label: const Text('View Map'),
-            ),
-          ),
-          const SizedBox(height: 9),
-          Row(
-            children: [
-              Icon(
-                Icons.location_on_outlined,
-                size: 17,
-                color: riderPoint == null
-                    ? Theme.of(context).colorScheme.onSurfaceVariant
-                    : Colors.red.shade700,
-              ),
-              const SizedBox(width: 5),
-              Expanded(
-                child: Text(
-                  riderPoint == null
-                      ? 'Location will appear here once the rider starts sharing their location.'
-                      : 'Rider location updates about every 8 seconds.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Card(
-            elevation: 1,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 25,
-                        backgroundColor: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
-                        foregroundImage:
-                            rider?['avatar_url'] != null &&
-                                '${rider?['avatar_url']}'.isNotEmpty
-                            ? NetworkImage(fixUrl('${rider?['avatar_url']}'))
-                            : null,
-                        child:
-                            rider?['avatar_url'] == null ||
-                                '${rider?['avatar_url']}'.isEmpty
-                            ? Icon(
-                                Icons.delivery_dining_rounded,
-                                color: Theme.of(context).colorScheme.primary,
-                                size: 28,
-                              )
-                            : null,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${rider?['name'] ?? 'Waiting for rider'}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              rider == null
-                                  ? 'Rider will be assigned once the order is ready.'
-                                  : (rider['role'] == null ||
-                                            rider['role']
-                                                    .toString()
-                                                    .toLowerCase() ==
-                                                'rider'
-                                        ? 'Delivery rider'
-                                        : rider['role'].toString()),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                            ),
-                            if (rider?['plate_number'] != null)
-                              Text(
-                                '${rider!['plate_number']}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                              ),
-                            if (riderPhone.isNotEmpty)
-                              Text(
-                                riderPhone,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: riderPhone.isEmpty
-                              ? null
-                              : () => _contactRider(riderPhone),
-                          icon: const Icon(Icons.call_rounded, size: 18),
-                          label: const Text('Call'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FilledButton.tonalIcon(
-                          onPressed: _openRiderChat,
-                          icon: const Icon(
-                            Icons.chat_bubble_outline_rounded,
-                            size: 18,
-                          ),
-                          label: const Text('Chat'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-        Card(
-          elevation: 1,
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    if (isDelivery)
-                      Image.asset(
-                        'assets/images/delivery.png',
-                        width: 58,
-                        height: 58,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => Icon(
-                          Icons.delivery_dining_rounded,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 36,
-                        ),
-                      )
-                    else
-                      Icon(
-                        Icons.storefront_rounded,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: 36,
-                      ),
-                    const SizedBox(width: 13),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            status == 'cancelled'
-                                ? 'Your order has been cancelled'
-                                : status == 'rejected'
-                                ? 'Your order was rejected'
-                                : isDelivered
-                                ? 'Your order has been delivered!'
-                                : isOnRoute
-                                ? 'Your order is on the way!'
-                                : 'Your order is being prepared',
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _statusText(status, type),
-                            style: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (routeMinutes != null && !isDelivered && isOnRoute)
-                      Text(
-                        'Approx. $routeMinutes min',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                Row(
-                  children: [
-                    for (var step = 0; step < 4; step++) ...[
-                      Expanded(
-                        child: _trackingStep(
-                          const [
-                            'Confirmed',
-                            'Preparing',
-                            'Ready',
-                            'Delivered',
-                          ][step],
-                          step,
-                          currentStep,
-                          isCurrent:
-                              (isOnRoute && step == 2) || step == currentStep,
-                        ),
-                      ),
-                      if (step < 3)
-                        _progressLine(
-                          step < currentStep
-                              ? 1
-                              : isOnRoute && step == 2
-                              ? .45
-                              : 0,
-                        ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Card(
-          elevation: 1,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Delivery Updates',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
-                if (timeline.isEmpty)
-                  Text(
-                    'Order updates will appear here as the shop changes its status.',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  )
-                else
-                  for (final entry in timeline)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.check_circle_rounded,
-                            size: 18,
-                            color: statusColor('${entry['status']}'),
+                Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Delivery Updates',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              _statusText('${entry['status']}', type),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (timeline.isEmpty)
                           Text(
-                            _timeTextInManila(entry['at']),
+                            'Order updates will appear here as the shop changes its status.',
                             style: TextStyle(
-                              fontSize: 11,
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurfaceVariant,
                             ),
+                          )
+                        else
+                          for (final entry in timeline)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_rounded,
+                                    size: 18,
+                                    color: statusColor('${entry['status']}'),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      _statusText('${entry['status']}', type),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    _timeTextInManila(entry['at']),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 46,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => OrderContentsScreen(
+                          orderId: widget.id,
+                          initialOrder: o,
+                        ),
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.primary,
+                      side: BorderSide(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                    icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                    label: const Text('View Order Details'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (o['can_pay'] == true)
+                  FilledButton(
+                    onPressed: _busy ? null : _pay,
+                    child: Text('Pay via GCash  |  ${peso(dbl(o['total']))}'),
+                  ),
+                if (status == 'pending' && o['can_cancel'] == true)
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      foregroundColor: Colors.red,
+                    ),
+                    onPressed: _busy ? null : _cancel,
+                    icon: _busy
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.cancel_outlined),
+                    label: Text(_busy ? 'Cancelling…' : 'Cancel order'),
+                  ),
+                if ((status == 'delivered' || status == 'completed') &&
+                    o['has_review'] != true)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        children: [
+                          const Text(
+                            'How was your order?',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              for (var i = 1; i <= 5; i++)
+                                IconButton(
+                                  onPressed: () => setState(() => _rating = i),
+                                  icon: Icon(
+                                    i <= _rating
+                                        ? Icons.star
+                                        : Icons.star_border,
+                                    color: Colors.amber,
+                                    size: 32,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          TextField(
+                            controller: _comment,
+                            decoration: const InputDecoration(
+                              hintText: 'Comment (optional)',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          FilledButton(
+                            onPressed: _busy ? null : _review,
+                            child: const Text('Submit review'),
                           ),
                         ],
                       ),
                     ),
+                  ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 46,
-          child: OutlinedButton.icon(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    OrderContentsScreen(orderId: widget.id, initialOrder: o),
-              ),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: espresso,
-              side: BorderSide(color: Theme.of(context).colorScheme.primary),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-            ),
-            icon: const Icon(Icons.receipt_long_outlined, size: 18),
-            label: const Text('View Order Details'),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (o['can_pay'] == true)
-          FilledButton(
-            onPressed: _busy ? null : _pay,
-            child: Text('Pay via GCash  |  ${peso(dbl(o['total']))}'),
-          ),
-        if (o['can_cancel'] == true)
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              foregroundColor: Colors.red,
-            ),
-            onPressed: _busy ? null : _cancel,
-            icon: _busy
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.cancel_outlined),
-            label: Text(_busy ? 'Cancelling…' : 'Cancel order'),
-          ),
-        if ((status == 'delivered' || status == 'completed') &&
-            o['has_review'] != true)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                children: [
-                  const Text(
-                    'How was your order?',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      for (var i = 1; i <= 5; i++)
-                        IconButton(
-                          onPressed: () => setState(() => _rating = i),
-                          icon: Icon(
-                            i <= _rating ? Icons.star : Icons.star_border,
-                            color: Colors.amber,
-                            size: 32,
-                          ),
-                        ),
-                    ],
-                  ),
-                  TextField(
-                    controller: _comment,
-                    decoration: const InputDecoration(
-                      hintText: 'Comment (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  FilledButton(
-                    onPressed: _busy ? null : _review,
-                    child: const Text('Submit review'),
-                  ),
-                ],
-              ),
-            ),
-          ),
       ],
     );
   }
+
+  Widget _trackingMapBackground({
+    required bool isDelivery,
+    required bool isTerminal,
+    required LatLng? destinationPoint,
+    required LatLng? shopPoint,
+    required LatLng? riderPoint,
+    required List<LatLng> routePoints,
+    required List<LatLng> mapPoints,
+    required String address,
+  }) {
+    if (!isDelivery || destinationPoint == null) {
+      return ColoredBox(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: isDelivery
+            ? _mapPlaceholder(address)
+            : Center(
+                child: Icon(
+                  Icons.storefront_rounded,
+                  size: 58,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+      );
+    }
+
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: riderPoint ?? destinationPoint,
+        initialZoom: 15,
+        initialCameraFit: mapPoints.length > 1
+            ? CameraFit.bounds(
+                bounds: LatLngBounds.fromPoints(mapPoints),
+                padding: const EdgeInsets.fromLTRB(36, 130, 36, 300),
+                maxZoom: 16,
+              )
+            : null,
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.kjmcoffeebrew.app',
+        ),
+        if (!isTerminal && routePoints.length > 1)
+          PolylineLayer(
+            polylines: [
+              Polyline(
+                points: routePoints,
+                color: Theme.of(context).colorScheme.primary,
+                strokeWidth: 6,
+                borderColor: Colors.white,
+                borderStrokeWidth: 2,
+              ),
+            ],
+          ),
+        MarkerLayer(
+          markers: [
+            if (shopPoint != null)
+              Marker(
+                point: shopPoint,
+                width: 42,
+                height: 48,
+                child: _mapPin(
+                  Icons.storefront_rounded,
+                  Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            Marker(
+              point: destinationPoint,
+              width: 42,
+              height: 48,
+              child: _mapPin(
+                Icons.home_rounded,
+                Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            if (!isTerminal && riderPoint != null)
+              Marker(
+                point: riderPoint,
+                width: 76,
+                height: 60,
+                child: _deliveryMapMarker(context),
+              ),
+          ],
+        ),
+        RichAttributionWidget(
+          attributions: [
+            TextSourceAttribution('OpenStreetMap contributors'),
+            TextSourceAttribution('Route via OSRM'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _trackingMapControls(LatLng center, bool hasRider) => Material(
+    color: Theme.of(context).colorScheme.surface,
+    borderRadius: BorderRadius.circular(18),
+    elevation: 3,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: 'Recenter map',
+          onPressed: () => _mapController.move(center, 15),
+          icon: Icon(hasRider ? Icons.my_location_rounded : Icons.home_rounded),
+        ),
+        const Divider(height: 1),
+        IconButton(
+          tooltip: 'Zoom in',
+          onPressed: () => _mapController.move(
+            _mapController.camera.center,
+            (_mapController.camera.zoom + 1).clamp(3, 18),
+          ),
+          icon: const Icon(Icons.add_rounded),
+        ),
+        IconButton(
+          tooltip: 'Zoom out',
+          onPressed: () => _mapController.move(
+            _mapController.camera.center,
+            (_mapController.camera.zoom - 1).clamp(3, 18),
+          ),
+          icon: const Icon(Icons.remove_rounded),
+        ),
+      ],
+    ),
+  );
 
   String _statusText(String status, [String type = 'delivery']) {
     switch (status) {
@@ -1131,7 +1195,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     required bool isCurrent,
   }) {
     final done = step <= currentStep;
-    final stageColors = [espresso, caramel, caramel, Colors.green];
+    final stageColors = [
+      Theme.of(context).colorScheme.primary,
+      Theme.of(context).colorScheme.primary,
+      Theme.of(context).colorScheme.primary,
+      Colors.green,
+    ];
     final activeColor =
         stageColors[step.clamp(0, stageColors.length - 1).toInt()];
     return Column(
@@ -1162,7 +1231,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 : Icons.home_rounded,
             size: 14,
             color: done
-                ? Colors.white
+                ? (step == 3
+                      ? Colors.white
+                      : Theme.of(context).colorScheme.onPrimary)
                 : Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
@@ -1249,287 +1320,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   );
 }
 
-class _LiveRiderMap extends StatefulWidget {
-  final int orderId;
-  final String orderNumber;
-  final String address;
-  final Map<String, dynamic> initialTracking;
-
-  const _LiveRiderMap({
-    required this.orderId,
-    required this.orderNumber,
-    required this.address,
-    required this.initialTracking,
-  });
-
-  @override
-  State<_LiveRiderMap> createState() => _LiveRiderMapState();
-}
-
-class _LiveRiderMapState extends State<_LiveRiderMap> {
-  late Map<String, dynamic> _tracking;
-  StreamSubscription<Map<String, dynamic>>? _subscription;
-  bool _refreshing = false;
-  Timer? _locationTimer;
-  final MapController _mapController = MapController();
-  bool _finished = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _tracking = widget.initialTracking;
-    _finished = _trackingOrderFinished(_tracking);
-    if (!_finished) {
-      _locationTimer = Timer.periodic(
-        const Duration(seconds: 8),
-        (_) => _refreshLocation(),
-      );
-      _subscription = Realtime.I.updates.listen((event) {
-        if (const {'order', 'delivery', 'rider'}.contains(event['kind'])) {
-          _refreshLocation();
-        }
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    _locationTimer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _refreshLocation() async {
-    if (_refreshing) return;
-    _refreshing = true;
-    try {
-      final latest = await Api.I.tracking(widget.orderId);
-      final finished = _trackingOrderFinished(latest);
-      if (mounted) {
-        setState(() {
-          _tracking = finished
-              ? {
-                  ...latest,
-                  'rider': null,
-                  'route': {'status': 'finished', 'points': <dynamic>[]},
-                }
-              : latest;
-          _finished = finished;
-        });
-        if (finished) {
-          _locationTimer?.cancel();
-          _locationTimer = null;
-          await _subscription?.cancel();
-          _subscription = null;
-          if (mounted) {
-            Navigator.of(context).pop<Map<String, dynamic>>({
-              ..._tracking,
-              'rider': null,
-              'route': {'status': 'finished', 'points': <dynamic>[]},
-            });
-          }
-        }
-      }
-    } on ApiException {
-      // Preserve the last known location if a live refresh briefly fails.
-    } finally {
-      _refreshing = false;
-    }
-  }
-
-  LatLng? _point(dynamic value) {
-    if (value is! Map || value['lat'] == null || value['lng'] == null) {
-      return null;
-    }
-    return LatLng(dbl(value['lat']), dbl(value['lng']));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final rider = _tracking['rider'] is Map
-        ? Map<String, dynamic>.from(_tracking['rider'] as Map)
-        : null;
-    final riderPoint = _point(rider);
-    final destinationPoint = _point(_tracking['destination']);
-    final shopPoint = _point(_tracking['shop']);
-    final route = _tracking['route'] is Map
-        ? Map<String, dynamic>.from(_tracking['route'] as Map)
-        : <String, dynamic>{};
-    final routePoints = route['points'] is List
-        ? mapList(route['points'])
-              .where((p) => p['lat'] != null && p['lng'] != null)
-              .map((p) => LatLng(dbl(p['lat']), dbl(p['lng'])))
-              .toList()
-        : <LatLng>[];
-    final routeMinutes = route['duration_seconds'] is num
-        ? math.max(1, ((route['duration_seconds'] as num) / 60).ceil()).toInt()
-        : null;
-    final routeKm = route['distance_meters'] is num
-        ? ((route['distance_meters'] as num) / 1000).toStringAsFixed(1)
-        : null;
-    final lastLocationAt = DateTime.tryParse(
-      '${rider?['last_updated_at'] ?? ''}',
-    )?.toLocal();
-    final isLive =
-        riderPoint != null &&
-        lastLocationAt != null &&
-        DateTime.now().difference(lastLocationAt).inSeconds <= 30;
-    final mapPoints = <LatLng>[
-      ...routePoints,
-      ?riderPoint,
-      ?destinationPoint,
-      if (shopPoint != null &&
-          shopPoint.latitude != 0 &&
-          shopPoint.longitude != 0)
-        shopPoint,
-    ];
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Rider location · ${widget.orderNumber}',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-      body: destinationPoint == null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.location_off_outlined,
-                      size: 48,
-                      color: colors.primary,
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Map location is not available yet.',
-                      textAlign: TextAlign.center,
-                    ),
-                    if (widget.address.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        widget.address,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: colors.onSurfaceVariant),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            )
-          : Stack(
-              children: [
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: riderPoint ?? destinationPoint,
-                    initialZoom: 14,
-                    initialCameraFit: mapPoints.length > 1
-                        ? CameraFit.bounds(
-                            bounds: LatLngBounds.fromPoints(mapPoints),
-                            padding: const EdgeInsets.all(48),
-                            maxZoom: 15,
-                          )
-                        : null,
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.kjmcoffeebrew.app',
-                    ),
-                    if (routePoints.length > 1)
-                      PolylineLayer(
-                        polylines: [
-                          Polyline(
-                            points: routePoints,
-                            color: colors.primary,
-                            strokeWidth: 6,
-                            borderColor: Colors.white,
-                            borderStrokeWidth: 2,
-                          ),
-                        ],
-                      ),
-                    MarkerLayer(
-                      markers: [
-                        if (shopPoint != null &&
-                            shopPoint.latitude != 0 &&
-                            shopPoint.longitude != 0)
-                          Marker(
-                            point: shopPoint,
-                            width: 48,
-                            height: 50,
-                            child: const Icon(
-                              Icons.storefront_rounded,
-                              color: caramel,
-                              size: 38,
-                            ),
-                          ),
-                        Marker(
-                          point: destinationPoint,
-                          width: 48,
-                          height: 50,
-                          child: const Icon(
-                            Icons.location_on_rounded,
-                            color: Colors.red,
-                            size: 42,
-                          ),
-                        ),
-                        if (riderPoint != null)
-                          Marker(
-                            point: riderPoint,
-                            width: 76,
-                            height: 60,
-                            child: _deliveryMapMarker(context),
-                          ),
-                      ],
-                    ),
-                    RichAttributionWidget(
-                      attributions: [
-                        TextSourceAttribution('OpenStreetMap contributors'),
-                        TextSourceAttribution('Route via OSRM'),
-                      ],
-                    ),
-                  ],
-                ),
-                Positioned(
-                  top: 14,
-                  right: 14,
-                  child: _routeMapBadge(
-                    context,
-                    live: isLive,
-                    updatedAt: lastLocationAt,
-                    eta: routeMinutes,
-                    distance: routeKm,
-                    error: route['error']?.toString(),
-                  ),
-                ),
-                Positioned(
-                  bottom: 18,
-                  right: 18,
-                  child: FloatingActionButton.small(
-                    heroTag: 'tracking-map-recenter',
-                    tooltip: 'Recenter map',
-                    onPressed: () =>
-                        _mapController.move(riderPoint ?? destinationPoint, 15),
-                    child: const Icon(Icons.my_location_rounded),
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
-}
-
-Widget _riderDistanceBadge(LatLng rider, LatLng customer) => Container(
+Widget _riderDistanceBadge(
+  BuildContext context,
+  LatLng rider,
+  LatLng customer,
+) => Container(
   padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
   decoration: BoxDecoration(
-    color: Colors.white.withValues(alpha: .96),
+    color: Theme.of(context).colorScheme.surface.withValues(alpha: .96),
     borderRadius: BorderRadius.circular(18),
     boxShadow: const [
       BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 2)),
@@ -1537,17 +1335,13 @@ Widget _riderDistanceBadge(LatLng rider, LatLng customer) => Container(
   ),
   child: Text(
     'Rider is ${Distance().as(LengthUnit.Kilometer, rider, customer).toStringAsFixed(1)} km away',
-    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+    style: TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: Theme.of(context).colorScheme.onSurface,
+    ),
   ),
 );
-
-bool _trackingOrderFinished(Map<String, dynamic> tracking) {
-  final order = tracking['order'];
-  final status = order is Map ? order['status']?.toString() : null;
-  const finalStatuses = {'delivered', 'completed', 'cancelled', 'rejected'};
-  return finalStatuses.contains(tracking['delivery_status']?.toString()) ||
-      finalStatuses.contains(status);
-}
 
 Widget _routeMapBadge(
   BuildContext context, {
@@ -1631,7 +1425,7 @@ Widget _deliveryMapMarker(BuildContext context) => Container(
   decoration: BoxDecoration(
     color: Theme.of(context).colorScheme.surface.withValues(alpha: .94),
     borderRadius: BorderRadius.circular(16),
-    border: Border.all(color: caramel, width: 2),
+    border: Border.all(color: Theme.of(context).colorScheme.primary, width: 2),
     boxShadow: [
       BoxShadow(
         color: Theme.of(context).colorScheme.shadow.withValues(alpha: .24),
@@ -1643,7 +1437,9 @@ Widget _deliveryMapMarker(BuildContext context) => Container(
   child: Image.asset(
     'assets/images/delivery.png',
     fit: BoxFit.contain,
-    errorBuilder: (context, error, stackTrace) =>
-        const Icon(Icons.delivery_dining_rounded, color: caramel),
+    errorBuilder: (context, error, stackTrace) => Icon(
+      Icons.delivery_dining_rounded,
+      color: Theme.of(context).colorScheme.primary,
+    ),
   ),
 );
