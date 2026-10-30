@@ -407,6 +407,42 @@ class Api {
         _d(await _call('GET', '/orders/$id/tracking')) as Map,
       );
 
+  Future<Map<String, dynamic>> customerRiderChat(int orderId) async =>
+      Map<String, dynamic>.from(
+        _d(await _call('GET', '/orders/$orderId/rider-chat')) as Map,
+      );
+
+  Future<Map<String, dynamic>> riderDeliveryChat(int deliveryId) async =>
+      Map<String, dynamic>.from(
+        _d(await _call('GET', '/rider/deliveries/$deliveryId/chat')) as Map,
+      );
+
+  Future<Map<String, dynamic>> sendCustomerRiderChatMessage({
+    required int orderId,
+    required String body,
+  }) async => Map<String, dynamic>.from(
+    _d(
+      await _call(
+        'POST',
+        '/orders/$orderId/rider-chat/messages',
+        body: {'body': body},
+      ),
+    ) as Map,
+  );
+
+  Future<Map<String, dynamic>> sendRiderChatMessage({
+    required int deliveryId,
+    required String body,
+  }) async => Map<String, dynamic>.from(
+    _d(
+      await _call(
+        'POST',
+        '/rider/deliveries/$deliveryId/chat/messages',
+        body: {'body': body},
+      ),
+    ) as Map,
+  );
+
   Future<Map<String, dynamic>> cancel(int id, {required String reason}) async {
     return Map<String, dynamic>.from(
       _d(await _call('POST', '/orders/$id/cancel', body: {'reason': reason}))
@@ -453,18 +489,68 @@ class Api {
   Future<List<Map<String, dynamic>>> addresses() async =>
       mapList(_d(await _call('GET', '/addresses')));
 
+  Future<Map<String, dynamic>> address(int id) async =>
+      Map<String, dynamic>.from(
+        _d(await _call('GET', '/addresses/$id')) as Map,
+      );
+
   Future<void> saveAddress(
     String label,
     String fullAddress,
     double lat,
-    double lng,
-  ) async {
+    double lng, {
+    String street = '',
+    String barangay = '',
+    String city = '',
+    String province = '',
+    String postalCode = '',
+    String? formattedAddress,
+    bool? isDefault,
+  }) async {
     await _call(
       'POST',
       '/addresses',
+      body: <String, dynamic>{
+        'label': label,
+        'full_address': fullAddress,
+        'formatted_address': formattedAddress ?? fullAddress,
+        'street': street,
+        'barangay': barangay,
+        'city': city,
+        'province': province,
+        'postal_code': postalCode,
+        'latitude': lat,
+        'longitude': lng,
+        'is_default': ?isDefault,
+      },
+    );
+  }
+
+  Future<void> updateAddress(
+    int id,
+    String label,
+    String fullAddress,
+    double lat,
+    double lng, {
+    String street = '',
+    String barangay = '',
+    String city = '',
+    String province = '',
+    String postalCode = '',
+    String? formattedAddress,
+  }) async {
+    await _call(
+      'PUT',
+      '/addresses/$id',
       body: {
         'label': label,
         'full_address': fullAddress,
+        'formatted_address': formattedAddress ?? fullAddress,
+        'street': street,
+        'barangay': barangay,
+        'city': city,
+        'province': province,
+        'postal_code': postalCode,
         'latitude': lat,
         'longitude': lng,
       },

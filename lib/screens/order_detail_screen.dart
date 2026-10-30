@@ -12,8 +12,38 @@ import '../core/theme.dart';
 import '../core/util.dart';
 import '../core/widgets.dart';
 import '../state/nav.dart';
-import 'customer_service_sheet.dart';
+import 'order_contents_screen.dart';
 import 'payment_screen.dart';
+import 'rider_chat_screen.dart';
+
+String _timeTextInManila(dynamic value) {
+  final raw = value?.toString().trim() ?? '';
+  if (raw.isEmpty) return '';
+  final parsed = DateTime.tryParse(raw);
+  if (parsed == null) return '';
+  // Laravel's status log query can return a naive UTC string. Treat naive
+  // values as UTC, then display Asia/Manila time regardless of device zone.
+  final hasZone = RegExp(
+    r'(Z|[+-]\d{2}:?\d{2})$',
+    caseSensitive: false,
+  ).hasMatch(raw);
+  final utc = hasZone
+      ? parsed.toUtc()
+      : DateTime.utc(
+          parsed.year,
+          parsed.month,
+          parsed.day,
+          parsed.hour,
+          parsed.minute,
+          parsed.second,
+          parsed.millisecond,
+          parsed.microsecond,
+        );
+  final manila = utc.add(const Duration(hours: 8));
+  final hour = manila.hour % 12 == 0 ? 12 : manila.hour % 12;
+  final minute = manila.minute.toString().padLeft(2, '0');
+  return '$hour:$minute ${manila.hour >= 12 ? 'PM' : 'AM'}';
+}
 
 class OrderDetailScreen extends StatefulWidget {
   final int id;
@@ -36,7 +66,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   int _rating = 5;
   final _comment = TextEditingController();
   bool _busy = false;
-  bool _showDetails = true;
 
   @override
   void initState() {
@@ -75,13 +104,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ? Map<String, dynamic>.from(trackingOrder)
           : await Api.I.order(widget.id);
       if (!mounted) return;
+      final finished =
+          _isFinalStatus('${o['status']}') ||
+          _isFinalStatus(t['delivery_status']?.toString() ?? '');
       setState(() {
         _o = o;
-        _t = t;
+        _t = finished ? _withoutLiveTracking(t) : t;
         _loading = false;
         _error = null;
       });
-      if (_isFinalStatus('${o['status']}')) _trackingTimer?.cancel();
+      if (finished) {
+        _trackingTimer?.cancel();
+        _trackingTimer = null;
+        await _liveSubscription?.cancel();
+        _liveSubscription = null;
+      }
     } on ApiException catch (e) {
       if (!mounted) return;
       if (!silent) {
@@ -102,11 +139,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     'rejected',
   }.contains(status);
 
+  bool _isTrackingFinished() =>
+      _isFinalStatus(_o?['status']?.toString() ?? '') ||
+      _isFinalStatus(_t?['delivery_status']?.toString() ?? '');
+
+  bool _isActiveDeliveryStatus(String status) =>
+      const {'picked_up', 'on_the_way', 'out_for_delivery'}.contains(status);
+
+  Map<String, dynamic> _withoutLiveTracking(Map<String, dynamic> tracking) => {
+    ...tracking,
+    'rider': null,
+    'route': {'status': 'finished', 'points': <dynamic>[]},
+  };
+
   void _startTrackingPolling() {
     _trackingTimer?.cancel();
     _trackingTimer = Timer.periodic(const Duration(seconds: 8), (_) {
-      final status = _o?['status']?.toString();
-      if (mounted && (status == null || !_isFinalStatus(status))) {
+      if (mounted && !_isTrackingFinished()) {
         _load(silent: true);
       }
     });
@@ -231,11 +280,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       await Api.I.cancel(widget.id, reason: reason);
       await _load();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
           const SnackBar(
             content: Text('Your order has been cancelled successfully.'),
           ),
         );
+        // Return to the root tab even when tracking was opened from a
+        // notification or post-checkout route.
+        final navigator = Navigator.of(context);
+        navigator.popUntil((route) => route.isFirst);
+        rootTab.value = 3;
       }
     } on ApiException catch (e) {
       final noLongerCancellable = e.message.toLowerCase().contains(
@@ -303,7 +358,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _trackingTimer?.cancel();
     _fullMapOpen = true;
     try {
-      await showDialog<void>(
+      final finalTracking = await showDialog<Map<String, dynamic>>(
         context: context,
         builder: (_) => Dialog.fullscreen(
           child: _LiveRiderMap(
@@ -314,10 +369,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ),
         ),
       );
+      if (finalTracking != null && mounted) {
+        final finalOrder = finalTracking['order'];
+        setState(() {
+          if (finalOrder is Map) _o = Map<String, dynamic>.from(finalOrder);
+          _t = _withoutLiveTracking(finalTracking);
+        });
+        _trackingTimer?.cancel();
+        _trackingTimer = null;
+        await _liveSubscription?.cancel();
+        _liveSubscription = null;
+      }
     } finally {
       _fullMapOpen = false;
-      if (mounted && !_isFinalStatus(_o?['status']?.toString() ?? '')) {
-        _startTrackingPolling();
+      if (mounted) {
+        if (mounted && !_isTrackingFinished()) {
+          _startTrackingPolling();
+        }
       }
     }
   }
@@ -345,11 +413,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ),
         title: const Text('Order Tracking'),
         actions: [
-          IconButton(
-            tooltip: 'Contact support',
-            onPressed: () => showCustomerServiceSheet(context),
-            icon: const Icon(Icons.support_agent_rounded),
-          ),
+          if (!_isTrackingFinished())
+            IconButton(
+              tooltip: 'Rider chat and customer support',
+              onPressed: _openRiderChat,
+              icon: const Icon(Icons.chat_bubble_outline_rounded),
+            ),
         ],
       ),
       body: _loading
@@ -360,6 +429,45 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
+  Future<void> _openRiderChat() async {
+    final rider = _t?['rider'];
+    if (rider is! Map || rider['name'] == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Rider chat will be available when a rider is assigned.',
+          ),
+        ),
+      );
+      return;
+    }
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => RiderChatScreen(targetId: widget.id, isRider: false),
+      ),
+    );
+  }
+
+  Future<void> _contactRider(String phone) async {
+    await _launchContact(Uri(scheme: 'tel', path: phone));
+  }
+
+  Future<void> _launchContact(Uri uri) async {
+    try {
+      if (!await launchUrl(uri) && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open the requested app.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open the requested app.')),
+        );
+      }
+    }
+  }
+
   Widget _body(Map<String, dynamic> o, Map<String, dynamic> t) {
     final status = '${o['status']}';
     final type = '${o['order_type']}';
@@ -367,6 +475,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final rider = t['rider'] is Map
         ? Map<String, dynamic>.from(t['rider'] as Map)
         : null;
+    final riderPhone = rider?['phone']?.toString().trim() ?? '';
     final dest = t['destination'] is Map
         ? Map<String, dynamic>.from(t['destination'] as Map)
         : <String, dynamic>{};
@@ -375,9 +484,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         : <String, dynamic>{};
     final timeline = t['timeline'] is List
         ? mapList(t['timeline'])
-        : <Map<String, dynamic>>[];
-    final items = o['items'] is List
-        ? mapList(o['items'])
         : <Map<String, dynamic>>[];
     LatLng? point(Map<String, dynamic> value) {
       if (value['lat'] == null || value['lng'] == null) return null;
@@ -418,13 +524,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         lastLocationAt != null &&
         DateTime.now().difference(lastLocationAt).inSeconds <= 30;
     final points = <LatLng>[...routePoints, ?destinationPoint, ?riderPoint];
+    final isCancelled = status == 'cancelled' || status == 'rejected';
     final isDelivered = status == 'delivered' || status == 'completed';
-    final isOnRoute = status == 'on_the_way' || status == 'picked_up';
-    final currentStep = isDelivered
-        ? 4
-        : isOnRoute
+    final isTerminal = _isFinalStatus(status);
+    final isOnRoute = _isActiveDeliveryStatus(status);
+    final currentStep = isCancelled
+        ? -1
+        : isDelivered
         ? 3
-        : (status == 'ready' || status == 'rider_assigned')
+        : isOnRoute || status == 'ready' || status == 'rider_assigned'
         ? 2
         : status == 'preparing'
         ? 1
@@ -448,7 +556,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
             ),
             Text(
-              isDelivery ? 'Live delivery tracking' : _statusText(status, type),
+              isDelivery && _isActiveDeliveryStatus(status)
+                  ? 'Live delivery tracking'
+                  : _statusText(status, type),
               style: TextStyle(
                 fontSize: 12,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -457,7 +567,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ],
         ),
         const SizedBox(height: 14),
-        if (isDelivery) ...[
+        if (isDelivery && !isTerminal) ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(22),
             child: SizedBox(
@@ -620,73 +730,109 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
             child: Padding(
               padding: const EdgeInsets.all(14),
-              child: Row(
+              child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 25,
-                    backgroundColor: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest,
-                    foregroundImage:
-                        rider?['avatar_url'] != null &&
-                            '${rider?['avatar_url']}'.isNotEmpty
-                        ? NetworkImage(fixUrl('${rider?['avatar_url']}'))
-                        : null,
-                    child:
-                        rider?['avatar_url'] == null ||
-                            '${rider?['avatar_url']}'.isEmpty
-                        ? Icon(
-                            Icons.delivery_dining_rounded,
-                            color: Theme.of(context).colorScheme.primary,
-                            size: 28,
-                          )
-                        : null,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${rider?['name'] ?? 'Waiting for rider'}',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          rider == null
-                              ? 'Rider will be assigned once the order is ready.'
-                              : 'Delivery rider',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurfaceVariant,
-                          ),
-                        ),
-                        if (rider?['plate_number'] != null)
-                          Text(
-                            '${rider!['plate_number']}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 25,
+                        backgroundColor: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
+                        foregroundImage:
+                            rider?['avatar_url'] != null &&
+                                '${rider?['avatar_url']}'.isNotEmpty
+                            ? NetworkImage(fixUrl('${rider?['avatar_url']}'))
+                            : null,
+                        child:
+                            rider?['avatar_url'] == null ||
+                                '${rider?['avatar_url']}'.isEmpty
+                            ? Icon(
+                                Icons.delivery_dining_rounded,
+                                color: Theme.of(context).colorScheme.primary,
+                                size: 28,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${rider?['name'] ?? 'Waiting for rider'}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                          ),
-                      ],
-                    ),
+                            const SizedBox(height: 3),
+                            Text(
+                              rider == null
+                                  ? 'Rider will be assigned once the order is ready.'
+                                  : (rider['role'] == null ||
+                                            rider['role']
+                                                    .toString()
+                                                    .toLowerCase() ==
+                                                'rider'
+                                        ? 'Delivery rider'
+                                        : rider['role'].toString()),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
+                            if (rider?['plate_number'] != null)
+                              Text(
+                                '${rider!['plate_number']}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                            if (riderPhone.isNotEmpty)
+                              Text(
+                                riderPhone,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  if (rider?['phone'] != null) ...[
-                    _contactButton(
-                      Icons.call_rounded,
-                      () => launchUrl(Uri.parse('tel:${rider!['phone']}')),
-                    ),
-                    const SizedBox(width: 8),
-                    _contactButton(
-                      Icons.chat_bubble_outline_rounded,
-                      () => launchUrl(Uri.parse('sms:${rider!['phone']}')),
-                    ),
-                  ],
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: riderPhone.isEmpty
+                              ? null
+                              : () => _contactRider(riderPhone),
+                          icon: const Icon(Icons.call_rounded, size: 18),
+                          label: const Text('Call'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton.tonalIcon(
+                          onPressed: _openRiderChat,
+                          icon: const Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            size: 18,
+                          ),
+                          label: const Text('Chat'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -705,30 +851,35 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               children: [
                 Row(
                   children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        isDelivery
-                            ? Icons.delivery_dining_rounded
-                            : Icons.storefront_rounded,
+                    if (isDelivery)
+                      Image.asset(
+                        'assets/images/delivery.png',
+                        width: 58,
+                        height: 58,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => Icon(
+                          Icons.delivery_dining_rounded,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 36,
+                        ),
+                      )
+                    else
+                      Icon(
+                        Icons.storefront_rounded,
                         color: Theme.of(context).colorScheme.primary,
-                        size: 29,
+                        size: 36,
                       ),
-                    ),
                     const SizedBox(width: 13),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            isDelivered
+                            status == 'cancelled'
+                                ? 'Your order has been cancelled'
+                                : status == 'rejected'
+                                ? 'Your order was rejected'
+                                : isDelivered
                                 ? 'Your order has been delivered!'
                                 : isOnRoute
                                 ? 'Your order is on the way!'
@@ -761,21 +912,33 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ],
                 ),
                 const SizedBox(height: 22),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _trackingStep('Confirmed', 0, currentStep),
-                      _progressLine(currentStep >= 1),
-                      _trackingStep('Preparing', 1, currentStep),
-                      _progressLine(currentStep >= 2),
-                      _trackingStep('Ready', 2, currentStep),
-                      _progressLine(currentStep >= 3),
-                      _trackingStep('Out for Delivery', 3, currentStep),
-                      _progressLine(currentStep >= 4),
-                      _trackingStep('Delivered', 4, currentStep),
+                Row(
+                  children: [
+                    for (var step = 0; step < 4; step++) ...[
+                      Expanded(
+                        child: _trackingStep(
+                          const [
+                            'Confirmed',
+                            'Preparing',
+                            'Ready',
+                            'Delivered',
+                          ][step],
+                          step,
+                          currentStep,
+                          isCurrent:
+                              (isOnRoute && step == 2) || step == currentStep,
+                        ),
+                      ),
+                      if (step < 3)
+                        _progressLine(
+                          step < currentStep
+                              ? 1
+                              : isOnRoute && step == 2
+                              ? .45
+                              : 0,
+                        ),
                     ],
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -825,7 +988,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             ),
                           ),
                           Text(
-                            timeText(entry['at']),
+                            _timeTextInManila(entry['at']),
                             style: TextStyle(
                               fontSize: 11,
                               color: Theme.of(context)
@@ -844,7 +1007,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         SizedBox(
           height: 46,
           child: OutlinedButton.icon(
-            onPressed: () => setState(() => _showDetails = !_showDetails),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    OrderContentsScreen(orderId: widget.id, initialOrder: o),
+              ),
+            ),
             style: OutlinedButton.styleFrom(
               foregroundColor: espresso,
               side: BorderSide(color: Theme.of(context).colorScheme.primary),
@@ -852,104 +1020,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 borderRadius: BorderRadius.circular(24),
               ),
             ),
-            icon: Icon(
-              _showDetails
-                  ? Icons.expand_less_rounded
-                  : Icons.receipt_long_outlined,
-              size: 18,
-            ),
-            label: Text(
-              _showDetails ? 'Hide Order Details' : 'View Order Details',
-            ),
+            icon: const Icon(Icons.receipt_long_outlined, size: 18),
+            label: const Text('View Order Details'),
           ),
         ),
-        if (_showDetails)
-          Card(
-            elevation: 1,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: ExpansionTile(
-              tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              leading: Icon(
-                Icons.receipt_long_rounded,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              title: const Text(
-                'Order details',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              subtitle: Text(
-                '${items.length} item${items.length == 1 ? '' : 's'}  |  ${peso(dbl(o['total']))}',
-              ),
-              initiallyExpanded: true,
-              children: [
-                if (isDelivery && address.isNotEmpty) ...[
-                  _infoRow(
-                    Icons.location_on_outlined,
-                    'Delivery address',
-                    address,
-                  ),
-                  const Divider(height: 20),
-                ],
-                for (final item in items)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${item['qty']} × ${item['name']}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              if (item['options'] is List &&
-                                  (item['options'] as List).isNotEmpty)
-                                Text(
-                                  (item['options'] as List).join(', '),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        Text(peso(dbl(item['line_total']))),
-                      ],
-                    ),
-                  ),
-                const Divider(height: 20),
-                _row('Subtotal', peso(dbl(o['subtotal']))),
-                if (dbl(o['discount']) > 0)
-                  _row('Discount', '-${peso(dbl(o['discount']))}'),
-                if (isDelivery)
-                  _row('Delivery fee', peso(dbl(o['delivery_fee']))),
-                _row('Total', peso(dbl(o['total'])), bold: true),
-                const SizedBox(height: 8),
-                _infoRow(
-                  Icons.payments_outlined,
-                  'Payment',
-                  '${payLabel(o['payment_method'])}  |  ${'${o['payment_status']}'.toUpperCase()}',
-                ),
-                if (o['reject_reason'] != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Reason: ${o['reject_reason']}',
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                ],
-              ],
-            ),
-          ),
         const SizedBox(height: 12),
         if (o['can_pay'] == true)
           FilledButton(
@@ -1035,6 +1109,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       case 'picked_up':
         return 'Picked up by rider';
       case 'on_the_way':
+      case 'out_for_delivery':
         return 'Out for delivery';
       case 'delivered':
         return 'Delivered';
@@ -1049,68 +1124,84 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
-  Widget _trackingStep(String label, int step, int current) {
-    final done = step <= current;
-    final stageColors = [
-      espresso,
-      caramel,
-      caramel,
-      Colors.deepOrange,
-      Colors.green,
-    ];
+  Widget _trackingStep(
+    String label,
+    int step,
+    int currentStep, {
+    required bool isCurrent,
+  }) {
+    final done = step <= currentStep;
+    final stageColors = [espresso, caramel, caramel, Colors.green];
     final activeColor =
         stageColors[step.clamp(0, stageColors.length - 1).toInt()];
-    return SizedBox(
-      width: 72,
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 12,
-            backgroundColor: done
+    return Column(
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: done
                 ? activeColor
                 : Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: Icon(
-              step < current
-                  ? Icons.check
-                  : step == 0
-                  ? Icons.check_rounded
-                  : step == 1
-                  ? Icons.coffee_rounded
-                  : step == 2
-                  ? Icons.inventory_2_rounded
-                  : step == 3
-                  ? Icons.delivery_dining_rounded
-                  : Icons.home_rounded,
-              size: 14,
-              color: done
-                  ? Colors.white
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+            border: isCurrent
+                ? Border.all(
+                    color: activeColor.withValues(alpha: .35),
+                    width: 4,
+                  )
+                : null,
           ),
-          const SizedBox(height: 5),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 9,
-              color: done
-                  ? activeColor
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
-              fontWeight: done ? FontWeight.w600 : FontWeight.normal,
-            ),
+          child: Icon(
+            step < currentStep || (step == 0 && done)
+                ? Icons.check_rounded
+                : step == 1
+                ? Icons.coffee_rounded
+                : step == 2
+                ? Icons.inventory_2_rounded
+                : Icons.home_rounded,
+            size: 14,
+            color: done
+                ? Colors.white
+                : Theme.of(context).colorScheme.onSurfaceVariant,
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 10,
+            color: done
+                ? activeColor
+                : Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: isCurrent
+                ? FontWeight.w800
+                : done
+                ? FontWeight.w600
+                : FontWeight.normal,
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _progressLine(bool active) => Container(
+  Widget _progressLine(double progress) => Container(
     width: 18,
-    height: 2,
-    color: active
-        ? Theme.of(context).colorScheme.primary
-        : Theme.of(context).colorScheme.surfaceContainerHighest,
+    height: 3,
     margin: const EdgeInsets.only(bottom: 18),
+    clipBehavior: Clip.antiAlias,
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(99),
+    ),
+    alignment: Alignment.centerLeft,
+    child: FractionallySizedBox(
+      widthFactor: progress.clamp(0, 1),
+      child: ColoredBox(color: Theme.of(context).colorScheme.primary),
+    ),
   );
 
   Widget _mapPin(IconData icon, Color color) => Container(
@@ -1156,61 +1247,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       ],
     ),
   );
-
-  Widget _contactButton(IconData icon, VoidCallback onPressed) =>
-      IconButton.filledTonal(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 19),
-        style: IconButton.styleFrom(
-          backgroundColor: Theme.of(context)
-              .colorScheme
-              .surfaceContainerHighest,
-          foregroundColor: espresso,
-        ),
-      );
-
-  Widget _infoRow(IconData icon, String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 19, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(value),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-  Widget _row(String l, String v, {bool bold = false}) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 2),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(l, style: TextStyle(fontWeight: bold ? FontWeight.w700 : null)),
-        Text(
-          v,
-          style: TextStyle(
-            fontWeight: bold ? FontWeight.w700 : null,
-            color: bold ? caramel : null,
-          ),
-        ),
-      ],
-    ),
-  );
 }
 
 class _LiveRiderMap extends StatefulWidget {
@@ -1248,13 +1284,12 @@ class _LiveRiderMapState extends State<_LiveRiderMap> {
         const Duration(seconds: 8),
         (_) => _refreshLocation(),
       );
+      _subscription = Realtime.I.updates.listen((event) {
+        if (const {'order', 'delivery', 'rider'}.contains(event['kind'])) {
+          _refreshLocation();
+        }
+      });
     }
-    _subscription = Realtime.I.updates.listen((event) {
-      if (!_finished &&
-          const {'order', 'delivery', 'rider'}.contains(event['kind'])) {
-        _refreshLocation();
-      }
-    });
   }
 
   @override
@@ -1269,12 +1304,31 @@ class _LiveRiderMapState extends State<_LiveRiderMap> {
     _refreshing = true;
     try {
       final latest = await Api.I.tracking(widget.orderId);
+      final finished = _trackingOrderFinished(latest);
       if (mounted) {
         setState(() {
-          _tracking = latest;
-          _finished = _trackingOrderFinished(latest);
+          _tracking = finished
+              ? {
+                  ...latest,
+                  'rider': null,
+                  'route': {'status': 'finished', 'points': <dynamic>[]},
+                }
+              : latest;
+          _finished = finished;
         });
-        if (_finished) _locationTimer?.cancel();
+        if (finished) {
+          _locationTimer?.cancel();
+          _locationTimer = null;
+          await _subscription?.cancel();
+          _subscription = null;
+          if (mounted) {
+            Navigator.of(context).pop<Map<String, dynamic>>({
+              ..._tracking,
+              'rider': null,
+              'route': {'status': 'finished', 'points': <dynamic>[]},
+            });
+          }
+        }
       }
     } on ApiException {
       // Preserve the last known location if a live refresh briefly fails.
@@ -1490,12 +1544,9 @@ Widget _riderDistanceBadge(LatLng rider, LatLng customer) => Container(
 bool _trackingOrderFinished(Map<String, dynamic> tracking) {
   final order = tracking['order'];
   final status = order is Map ? order['status']?.toString() : null;
-  return const {
-    'delivered',
-    'completed',
-    'cancelled',
-    'rejected',
-  }.contains(status);
+  const finalStatuses = {'delivered', 'completed', 'cancelled', 'rejected'};
+  return finalStatuses.contains(tracking['delivery_status']?.toString()) ||
+      finalStatuses.contains(status);
 }
 
 Widget _routeMapBadge(
@@ -1553,7 +1604,7 @@ Widget _routeMapBadge(
       Text(
         updatedAt == null
             ? 'Waiting for rider location'
-            : 'Updated ${timeText(updatedAt.toIso8601String())}',
+            : 'Updated ${_timeTextInManila(updatedAt.toUtc().toIso8601String())}',
         style: TextStyle(
           fontSize: 10,
           color: Theme.of(context).colorScheme.onSurfaceVariant,

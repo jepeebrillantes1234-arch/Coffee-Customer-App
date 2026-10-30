@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
 import '../core/util.dart';
+import '../screens/rider_chat_screen.dart';
 import 'rider_location_service.dart';
 import 'rider_proof_screen.dart';
 import 'rider_theme.dart';
@@ -41,16 +42,22 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
         await LocationService.I.start(deliveryId: widget.id);
       }
     } on ApiException catch (e) {
-      if (mounted) setState(() { _error = e.message; _loading = false; });
+      if (mounted) {
+        setState(() { _error = e.message; _loading = false; });
+      }
     } catch (_) {
-      if (mounted) setState(() { _error = 'Could not load this delivery. Pull down to retry.'; _loading = false; });
+      if (mounted) {
+        setState(() { _error = 'Could not load this delivery. Pull down to retry.'; _loading = false; });
+      }
     }
   }
 
   Future<void> _action(String action) async {
     if (_busy) return;
     if (action == 'start' && !await LocationService.I.ensureReady()) {
-      if (mounted) setState(() => _error = LocationService.I.error.value ?? 'Enable location access before starting the delivery.');
+      if (mounted) {
+        setState(() => _error = LocationService.I.error.value ?? 'Enable location access before starting the delivery.');
+      }
       return;
     }
     if (action == 'decline') {
@@ -66,7 +73,9 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
     setState(() { _busy = true; _error = null; });
     try {
       await Api.I.action(widget.id, action);
-      if (action == 'start') await LocationService.I.start(deliveryId: widget.id);
+      if (action == 'start') {
+        await LocationService.I.start(deliveryId: widget.id);
+      }
       if (action == 'decline') await LocationService.I.stop();
       if (!mounted) return;
       if (action == 'decline') {
@@ -77,7 +86,9 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'The delivery update failed. Check your connection and retry.');
+      if (mounted) {
+        setState(() => _error = 'The delivery update failed. Check your connection and retry.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -97,7 +108,9 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
   Future<void> _openUrl(String value) async {
     final uri = Uri.tryParse(value);
     if (uri == null || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the requested app.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the requested app.')));
+      }
     }
   }
 
@@ -163,6 +176,16 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
           Row(children: [const Expanded(child: Text('Order total', style: TextStyle(fontWeight: FontWeight.w700))), Text(peso(dbl(order['total'])), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: riderAccent(context)))]),
           if (!cod) Padding(padding: const EdgeInsets.only(top: 6), child: Text('Payment status: ${(order['payment_status'] ?? 'unknown').toString().toUpperCase()}', style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 12))),
         ]))),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push<void>(
+            MaterialPageRoute(
+              builder: (_) => RiderChatScreen(targetId: widget.id, isRider: true),
+            ),
+          ),
+          icon: const Icon(Icons.chat_bubble_outline_rounded),
+          label: const Text('Chat with customer'),
+        ),
         const SizedBox(height: 12),
         if (_busy) const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator())) else ..._actionButtons(status, order),
       ],

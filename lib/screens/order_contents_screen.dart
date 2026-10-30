@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
+import '../core/theme.dart';
 import '../core/util.dart';
 import '../core/widgets.dart';
 
 class OrderContentsScreen extends StatefulWidget {
-  const OrderContentsScreen({super.key, required this.orderId});
+  const OrderContentsScreen({
+    super.key,
+    required this.orderId,
+    this.initialOrder,
+  });
 
   final int orderId;
+  final Map<String, dynamic>? initialOrder;
 
   @override
   State<OrderContentsScreen> createState() => _OrderContentsScreenState();
@@ -21,14 +27,16 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
   @override
   void initState() {
     super.initState();
+    _order = widget.initialOrder;
+    _loading = _order == null;
     _load();
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    if (_order == null) {
+      setState(() => _loading = true);
+    }
+    setState(() => _error = null);
     try {
       final order = await Api.I.order(widget.orderId);
       if (!mounted) return;
@@ -94,10 +102,14 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
+                      const SizedBox(height: 10),
+                      _statusBadge(order),
                       const SizedBox(height: 6),
                       Text(
                         '${order['order_type'] == 'delivery' ? 'Delivery' : 'Pickup'} · ${dateTimeText(order['created_at'])}',
-                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -190,6 +202,22 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
     );
   }
 
+  Widget _statusBadge(Map<String, dynamic> order) {
+    final status = '${order['status'] ?? ''}';
+    final color = statusColor(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Text(
+        statusLabel(status, '${order['order_type'] ?? 'delivery'}'),
+        style: TextStyle(color: color, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+
   Widget _itemRow(Map<String, dynamic> item) {
     final image = (item['image_url'] ?? '').toString();
     final options = item['options'] is List
@@ -206,8 +234,13 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
                 ? Container(
                     width: 58,
                     height: 58,
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    child: Icon(Icons.coffee_rounded, color: Theme.of(context).colorScheme.primary),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest,
+                    child: Icon(
+                      Icons.coffee_rounded,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   )
                 : NetImage(image, width: 58, height: 58),
           ),
@@ -224,7 +257,10 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
                   const SizedBox(height: 3),
                   Text(
                     options,
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ],

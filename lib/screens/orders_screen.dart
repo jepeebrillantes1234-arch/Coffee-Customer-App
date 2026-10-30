@@ -32,7 +32,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
     rootTab.addListener(_onTab);
     Realtime.I.connect();
     _liveSubscription = Realtime.I.updates.listen((event) {
-      if (rootTab.value == 3 && ['order', 'delivery', 'payment'].contains(event['kind'])) _load(silent: true);
+      if (rootTab.value == 3 &&
+          ['order', 'delivery', 'payment'].contains(event['kind'])) {
+        _load(silent: true);
+      }
     });
   }
 
@@ -110,9 +113,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete order?'),
+        title: const Text('Remove order from history?'),
         content: const Text(
-          'This order will be removed from your order history.',
+          'Are you sure you want to remove this order from your order history? Your order and payment records will remain available to the shop.',
         ),
         actions: [
           TextButton(
@@ -122,7 +125,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
+            child: const Text('Remove'),
           ),
         ],
       ),
@@ -133,8 +136,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
       await Api.I.deleteOrder(order['id'] as int);
       if (!mounted) return;
       setState(() => _orders.removeWhere((item) => item['id'] == order['id']));
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Order deleted.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Order removed from your history.')),
+      );
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -154,7 +158,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Future<void> _viewOrderContents(Map<String, dynamic> order) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => OrderContentsScreen(orderId: order['id'] as int),
+        builder: (_) => OrderContentsScreen(
+          orderId: order['id'] as int,
+          initialOrder: order,
+        ),
       ),
     );
     _load(silent: true);
@@ -170,7 +177,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
         leading: IconButton(
           tooltip: 'Back to Home',
           onPressed: () => rootTab.value = 0,
-          icon: Icon(Icons.arrow_back_rounded, color: Theme.of(context).colorScheme.primary, size: 28),
+          icon: Icon(
+            Icons.arrow_back_rounded,
+            color: Theme.of(context).colorScheme.primary,
+            size: 28,
+          ),
         ),
         titleSpacing: 0,
         title: Column(
@@ -189,7 +200,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
               'Track your orders and deliveries',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 12,
+              ),
             ),
           ],
         ),
@@ -220,7 +234,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             decoration: BoxDecoration(
                               color: selected
                                   ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                  : Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(30),
                             ),
                             child: Row(
@@ -228,7 +244,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                 Text(
                                   filter,
                                   style: TextStyle(
-                                    color: selected ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                                    color: selected
+                                        ? Colors.white
+                                        : Theme.of(context)
+                                              .colorScheme
+                                              .onSurface,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -245,8 +265,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   decoration: BoxDecoration(
                                     color: selected
                                         ? Colors.white24
-                                        : _countColor(filter, context)
-                                              .withValues(alpha: 0.18),
+                                        : _countColor(
+                                            filter,
+                                            context,
+                                          ).withValues(alpha: 0.18),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Text(
@@ -277,7 +299,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             Icon(
                               Icons.cloud_off_outlined,
                               size: 42,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                             ),
                             const SizedBox(height: 10),
                             Text(_error!, textAlign: TextAlign.center),
@@ -305,7 +329,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               _orders.isEmpty
                                   ? 'You have no orders yet.'
                                   : 'No ${_filter.toLowerCase()} orders.',
-                              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
                             ),
                           ],
                         ),
@@ -365,7 +393,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     ? Container(
                         width: 70,
                         height: 78,
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
                         child: Icon(
                           Icons.receipt_long_rounded,
                           color: Theme.of(context).colorScheme.onSurface,
@@ -406,7 +436,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11.5,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -454,7 +486,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               statusText,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                              style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
@@ -483,25 +515,26 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       ),
                     ),
                   ),
-                  if (_isCompleted(order) || _isCancelled(order))
-                    TextButton.icon(
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.red.shade600,
-                        backgroundColor: Theme.of(context).colorScheme.errorContainer,
-                        padding: const EdgeInsets.symmetric(horizontal: 7),
-                        minimumSize: const Size(0, 28),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onPressed: () => _deleteOrder(order),
-                      icon: const Icon(Icons.delete_outline_rounded, size: 14),
-                      label: const Text(
-                        'Delete',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                        ),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .errorContainer,
+                      padding: const EdgeInsets.symmetric(horizontal: 7),
+                      minimumSize: const Size(0, 28),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () => _deleteOrder(order),
+                    icon: const Icon(Icons.archive_outlined, size: 14),
+                    label: const Text(
+                      'Remove',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
+                  ),
                 ],
               ),
             ],
@@ -517,18 +550,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
     _ => Icons.more_horiz_rounded,
   };
 
-  String _englishStatus(String status, String type) => switch (status) {
-    'awaiting_payment' => 'Awaiting payment',
-    'pending' => 'Pending',
-    'confirmed' => 'Confirmed',
-    'preparing' => 'Preparing',
-    'ready' => type == 'pickup' ? 'Ready for pickup' : 'Ready for rider',
-    'rider_assigned' => 'Rider assigned',
-    'accepted' => 'Accepted',
-    'picked_up' => 'Picked up',
-    'on_the_way' => 'On the way',
-    'delivered' || 'completed' => 'Completed',
-    'rejected' || 'cancelled' => 'Cancelled',
-    _ => status.replaceAll('_', ' '),
-  };
+  String _englishStatus(String status, String type) =>
+      statusLabel(status, type);
 }

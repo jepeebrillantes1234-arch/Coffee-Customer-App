@@ -34,7 +34,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _placing = false;
   int _quoteSeq = 0;
 
-
   @override
   void initState() {
     super.initState();
@@ -72,13 +71,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   };
 
   Future<void> _refresh() async {
-    if (_type == 'delivery' && _pin == null) {
-      setState(() {
-        _quote = null;
-        _error = null;
-      });
-      return;
-    }
     final seq = ++_quoteSeq;
     setState(() => _quoting = true);
     try {
@@ -110,13 +102,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final longitude = double.tryParse('${selected['longitude']}');
     if (latitude == null || longitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This saved address has no valid map pin. Edit it and choose its location.')),
+        const SnackBar(
+          content: Text(
+            'This saved address has no valid map pin. Edit it and choose its location.',
+          ),
+        ),
       );
       return;
     }
     setState(() {
       _pin = LatLng(latitude, longitude);
-      _address.text = '${selected['full_address'] ?? ''}';
+      _address.text =
+          '${selected['formatted_address'] ?? selected['full_address'] ?? ''}';
       _locationName.text = '${selected['label'] ?? ''}';
       _error = null;
     });
@@ -184,7 +181,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final displayedSubtotal = quote == null
         ? Cart.I.subtotal
         : dbl(quote['subtotal']);
-    final displayedTotal = quote == null ? null : dbl(quote['total']);
+    final needsDeliveryAddress = _type == 'delivery' && _pin == null;
+    final displayedTotal = quote == null || needsDeliveryAddress
+        ? null
+        : dbl(quote['total']);
+    final totalLabel = displayedTotal != null
+        ? peso(displayedTotal)
+        : needsDeliveryAddress
+        ? 'Calculated after address'
+        : 'Calculated at checkout';
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -241,11 +246,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       title: Text(
-                        address.isEmpty
-                            ? 'Choose a delivery address'
-                            : (_locationName.text.trim().isEmpty
-                                  ? address
-                                  : _locationName.text.trim()),
+                        address.isEmpty ? 'Choose a delivery address' : address,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -256,7 +257,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       subtitle: Text(
                         _pin == null
                             ? 'Required for delivery'
-                            : '${address.isEmpty ? '' : '$address\n'}${_pin!.latitude.toStringAsFixed(5)}, ${_pin!.longitude.toStringAsFixed(5)}',
+                            : _locationName.text.trim().isEmpty
+                            ? 'Delivery location selected'
+                            : _locationName.text.trim(),
                         style: TextStyle(
                           fontSize: 11,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -460,18 +463,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         if (_type == 'delivery')
                           _row(
                             'Delivery Fee',
-                            quote == null
-                                ? 'Calculated after address'
+                            quote == null || needsDeliveryAddress
+                                ? 'Select address to calculate'
                                 : peso(dbl(quote['delivery_fee'])),
                           ),
                         const Divider(height: 20),
-                        _row(
-                          'Total',
-                          displayedTotal == null
-                              ? 'Calculated at checkout'
-                              : peso(displayedTotal),
-                          bold: true,
-                        ),
+                        _row('Total', totalLabel, bold: true),
                       ],
                     ),
                   ),

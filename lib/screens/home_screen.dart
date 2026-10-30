@@ -80,8 +80,10 @@ class _HomeScreenState extends State<HomeScreen> {
       Map<String, dynamic>? cfg;
       String? bannerError;
       var banners = <Map<String, dynamic>>[];
+      var bannersLoaded = false;
       try {
         banners = await Api.I.homeBanners();
+        bannersLoaded = true;
       } catch (error) {
         debugPrint('Public home banner request failed: $error');
         bannerError = 'Could not load home banners: $error';
@@ -92,10 +94,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (Api.I.loggedIn) {
         try {
           cfg = await Api.I.appConfig();
-          final personalizedBanners = _readBanners(cfg);
-          if (personalizedBanners.isNotEmpty) {
-            banners = personalizedBanners;
-          }
+          banners = _readBanners(cfg);
+          bannersLoaded = true;
         } catch (error) {
           debugPrint('Personalized home config request failed: $error');
         }
@@ -113,7 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
         bannerError = null;
         debugPrint('Loaded ${banners.length} home banner(s).');
       } else {
-        bannerError ??= 'No active home banners were returned by the server.';
+        bannerError = null;
       }
       prods.sort(
         (a, b) => dbl(b['avg_rating']).compareTo(dbl(a['avg_rating'])),
@@ -122,8 +122,8 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _cats = cats;
         _products = prods;
-        if (banners.isNotEmpty) {
-          _banners = banners;
+        if (bannersLoaded) {
+          _banners = banners.take(5).toList(growable: false);
           _bannerIndex = 0;
         }
         _bannerError = bannerError;
@@ -136,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _error = null;
         _loading = false;
       });
-      if (banners.isNotEmpty) {
+      if (bannersLoaded && banners.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && _bannerController.hasClients) {
             _bannerController.jumpToPage(0);
@@ -230,7 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<Map<String, dynamic>> get _activeBanners =>
-      _banners;
+      _banners.take(5).toList(growable: false);
 
   void _openBannerDestination(Map<String, dynamic> banner) {
     final type = (banner['banner_type'] ?? banner['type'] ?? 'custom')
@@ -241,8 +241,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ? destination
         : switch (type) {
             'order_now' => 'menu',
-            'promo' || 'redeem' => 'promos',
+            'new_product' => 'product',
+            'promo' ||
+            'redeem' ||
+            'new_promo' ||
+            'promo_code' ||
+            'special_offer' => 'promos',
             'membership' || 'rewards' => 'profile',
+            'announcement' => 'announcement',
             _ => 'menu',
           };
 
@@ -254,16 +260,48 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'promos':
       case 'promo':
       case 'redeem':
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const PromosScreen()),
+      case 'offer':
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute<void>(builder: (_) => const PromosScreen()));
+        return;
+      case 'promo_code':
+        final promoId = int.tryParse(
+          '${banner['promo_id'] ?? banner['destination_id'] ?? ''}',
         );
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => PromosScreen(initialPromoId: promoId),
+          ),
+        );
+        return;
+      case 'product':
+        final productId = int.tryParse(
+          '${banner['destination_id'] ?? banner['product_id'] ?? ''}',
+        );
+        if (productId != null && productId > 0) {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ProductScreen(id: productId),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('This product destination is unavailable.'),
+            ),
+          );
+        }
+        return;
+      case 'announcement':
+        _showAnnouncement(banner);
         return;
       case 'profile':
       case 'membership':
       case 'rewards':
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const ProfileScreen()),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute<void>(builder: (_) => const ProfileScreen()));
         return;
       case 'cart':
         rootTab.value = 2;
@@ -273,9 +311,30 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       default:
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This banner destination is unavailable.')),
+          const SnackBar(
+            content: Text('This banner destination is unavailable.'),
+          ),
         );
     }
+  }
+
+  void _showAnnouncement(Map<String, dynamic> banner) {
+    final title = (banner['title'] ?? banner['headline'] ?? 'Announcement')
+        .toString();
+    final description = (banner['description'] ?? '').toString();
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(description.isEmpty ? title : description),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ---------- UI ----------
@@ -349,6 +408,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _homeBanner() {
+    if (_activeBanners.isEmpty && !_bannerLoading) {
+      return const SizedBox.shrink();
+    }
     return AspectRatio(
       aspectRatio: 1.5,
       child: ClipRRect(
@@ -528,7 +590,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
-                  colors: [Color(0xCC160C08), Color(0x66000000), Color(0x00000000)],
+                  colors: [
+                    Color(0xCC160C08),
+                    Color(0x66000000),
+                    Color(0x00000000),
+                  ],
                 ),
               ),
             ),
@@ -577,11 +643,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   FilledButton.icon(
                     onPressed: () => _openBannerDestination(banner),
                     icon: Icon(_bannerIcon(type), size: 17),
-                    label: Text(title.isEmpty ? 'Explore' : title),
+                    label: Text(
+                      (banner['button_text'] ?? '').toString().trim().isNotEmpty
+                          ? banner['button_text'].toString().trim()
+                          : title.isEmpty
+                          ? 'Explore'
+                          : title,
+                    ),
                     style: FilledButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.surface,
                       foregroundColor: Theme.of(context).colorScheme.onSurface,
-                      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 15,
+                        vertical: 9,
+                      ),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
@@ -597,10 +672,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   IconData _bannerIcon(String type) => switch (type) {
     'order_now' => Icons.coffee_rounded,
-    'promo' => Icons.local_offer_rounded,
+    'promo' ||
+    'new_promo' ||
+    'promo_code' ||
+    'special_offer' => Icons.local_offer_rounded,
+    'new_product' => Icons.new_releases_rounded,
     'membership' => Icons.card_membership_rounded,
     'redeem' => Icons.redeem_rounded,
     'rewards' => Icons.stars_rounded,
+    'announcement' => Icons.campaign_rounded,
     _ => Icons.arrow_forward_rounded,
   };
 

@@ -7,7 +7,8 @@ import 'product_screen.dart';
 import 'promo_carousel.dart';
 
 class PromosScreen extends StatefulWidget {
-  const PromosScreen({super.key});
+  final int? initialPromoId;
+  const PromosScreen({super.key, this.initialPromoId});
 
   @override
   State<PromosScreen> createState() => _PromosScreenState();
@@ -17,6 +18,7 @@ class _PromosScreenState extends State<PromosScreen> {
   List<Map<String, dynamic>> _promos = [];
   bool _loading = true;
   String? _error;
+  bool _handledInitialPromo = false;
 
   @override
   void initState() {
@@ -36,6 +38,7 @@ class _PromosScreenState extends State<PromosScreen> {
         _promos = promos;
         _loading = false;
       });
+      _openInitialPromo(promos);
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -49,6 +52,29 @@ class _PromosScreenState extends State<PromosScreen> {
         _loading = false;
       });
     }
+  }
+
+  void _openInitialPromo(List<Map<String, dynamic>> promos) {
+    final id = widget.initialPromoId;
+    if (_handledInitialPromo || id == null) return;
+    _handledInitialPromo = true;
+    Map<String, dynamic>? promo;
+    for (final item in promos) {
+      if ((item['id'] as num?)?.toInt() == id) {
+        promo = item;
+        break;
+      }
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (promo == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This promo is no longer available.')),
+        );
+        return;
+      }
+      _choosePromo(promo);
+    });
   }
 
   Future<void> _choosePromo(Map<String, dynamic> promo) async {
