@@ -14,6 +14,13 @@ List<LatLng> routePointsFrom(dynamic route) {
       .toList(growable: false);
 }
 
+LatLng? latLngFrom(dynamic value) {
+  if (value is! Map) return null;
+  final lat = double.tryParse('${value['lat'] ?? ''}');
+  final lng = double.tryParse('${value['lng'] ?? ''}');
+  return lat == null || lng == null ? null : LatLng(lat, lng);
+}
+
 /// Returns a road point for display only when the live GPS point is nearby.
 /// The original GPS coordinates are still used for location uploads.
 LatLng? nearestRoadPoint(LatLng? gps, List<LatLng> route) {

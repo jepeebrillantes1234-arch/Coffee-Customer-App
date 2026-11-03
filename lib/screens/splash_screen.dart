@@ -6,9 +6,10 @@ import 'package:flutter/material.dart';
 /// - Visible loading bar with percentage, status message, and moving coffee cup icon
 /// - Unchanged usage: SplashScreen(nextScreen: ...)
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key, required this.nextScreen});
+  const SplashScreen({super.key, required this.nextScreen, this.onCompleted});
 
   final Widget nextScreen;
+  final VoidCallback? onCompleted;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -73,6 +74,9 @@ class _SplashScreenState extends State<SplashScreen>
             FadeTransition(opacity: animation, child: child),
       ),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onCompleted?.call();
+    });
   }
 
   // ---------- HELPERS ----------

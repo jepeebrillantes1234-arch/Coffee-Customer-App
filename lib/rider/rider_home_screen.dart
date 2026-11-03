@@ -1,18 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
 
 import '../core/api.dart';
 import '../core/util.dart';
 import '../screens/auth_screen.dart';
+import 'rider_profile_screen.dart';
 import 'rider_delivery_screen.dart';
 import 'rider_location_service.dart';
-import 'rider_map_utils.dart';
-import 'rider_profile_screen.dart';
 import 'rider_theme.dart';
+import '../screens/notifications_screen.dart';
 
 List<Map<String, dynamic>> _asList(dynamic value) => value is List
     ? value
@@ -22,14 +19,15 @@ List<Map<String, dynamic>> _asList(dynamic value) => value is List
     : <Map<String, dynamic>>[];
 
 class RiderHomeScreen extends StatefulWidget {
-  const RiderHomeScreen({super.key});
+  const RiderHomeScreen({super.key, this.initialTab = 0});
+
+  final int initialTab;
 
   @override
   State<RiderHomeScreen> createState() => _RiderHomeScreenState();
 }
 
 class _RiderHomeScreenState extends State<RiderHomeScreen> {
-  final _scaffoldKey = GlobalKey<ScaffoldState>();
   List<Map<String, dynamic>> _active = [];
   List<Map<String, dynamic>> _history = [];
   Map<String, dynamic> _summary = {};
@@ -37,15 +35,28 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   bool _loading = true;
   bool _refreshing = false;
   bool _availabilityBusy = false;
-  bool _profileOpening = false;
+  int? _acceptingDeliveryId;
   bool _hasLoadedOnce = false;
   String? _error;
-  int _tab = 0;
+  late int _tab;
+  bool _profileOpening = false;
   Timer? _poll;
+
+  int get _activeDeliveryCount {
+    const activeStatuses = {'assigned', 'accepted', 'picked_up', 'on_the_way'};
+    return _active
+        .where((item) => activeStatuses.contains(item['status']?.toString()))
+        .map((item) => item['id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .length;
+  }
 
   @override
   void initState() {
     super.initState();
+    _tab = widget.initialTab.clamp(0, 2).toInt();
     _load();
     _poll = Timer.periodic(
       const Duration(seconds: 15),
@@ -95,19 +106,13 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
         _loading = false;
       });
 
-      Map<String, dynamic>? enRoute;
-      for (final delivery in active) {
-        if (delivery['status'] == 'on_the_way') {
-          enRoute = delivery;
-          break;
-        }
-      }
-      final deliveryId = enRoute?['id'];
-      if (deliveryId is num) {
-        await LocationService.I.start(deliveryId: deliveryId.toInt());
-      } else {
-        await LocationService.I.stop();
-      }
+      final enRouteIds = active
+          .where((delivery) => delivery['status'] == 'on_the_way')
+          .map((delivery) => delivery['id'])
+          .whereType<num>()
+          .map((id) => id.toInt())
+          .toSet();
+      await LocationService.I.syncActiveDeliveries(enRouteIds);
       if (newAssignment != null && mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _showNewAssignment(newAssignment);
@@ -140,30 +145,33 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     );
   }
 
-  Future<void> _logout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Log out?'),
-        content: const Text(
-          'You will need to sign in again to manage deliveries.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Log Out'),
-          ),
-        ],
-      ),
+  Future<void> _openDelivery(Map<String, dynamic> delivery) async {
+    final rawId = delivery['id'];
+    if (rawId is! num) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => RiderDeliveryScreen(id: rawId.toInt())),
     );
-    if (confirmed != true) return;
-    await LocationService.I.stop();
-    await Api.I.logout();
-    if (mounted) _goLogin();
+    _load(silent: true);
+  }
+
+  Future<void> _openProfile() async {
+    if (_profileOpening) return;
+    _profileOpening = true;
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const RiderProfileScreen()));
+    _profileOpening = false;
+    if (mounted) {
+      setState(() => _tab = 0);
+      _load(silent: true);
+    }
+  }
+
+  void _selectBottomTab(int value) {
+    if (value == 3) {
+      _openProfile();
+    } else {
+      setState(() => _tab = value);
+    }
   }
 
   Future<void> _toggleAvailable(bool value) async {
@@ -172,23 +180,42 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     try {
       final result = await Api.I.setAvailability(value);
       if (mounted) setState(() => _available = result);
-    } on ApiException catch (e) {
+    } on ApiException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+            .showSnackBar(SnackBar(content: Text(error.message)));
       }
     } finally {
       if (mounted) setState(() => _availabilityBusy = false);
     }
   }
 
-  Future<void> _openDelivery(Map<String, dynamic> delivery) async {
-    final rawId = delivery['id'];
-    if (rawId is! num) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => RiderDeliveryScreen(id: rawId.toInt())),
-    );
-    _load(silent: true);
+  Future<void> _acceptDelivery(Map<String, dynamic> delivery) async {
+    final id = delivery['id'];
+    if (id is! num || _acceptingDeliveryId != null) return;
+    setState(() => _acceptingDeliveryId = id.toInt());
+    try {
+      await Api.I.action(id.toInt(), 'accept');
+      if (!mounted) return;
+      await _load(silent: true);
+      if (!mounted) return;
+      await _openDelivery({...delivery, 'status': 'accepted'});
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not accept this delivery. Try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _acceptingDeliveryId = null);
+    }
   }
 
   Future<void> _showNewAssignment(Map<String, dynamic> delivery) async {
@@ -246,201 +273,89 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     if (review == true && mounted) await _openDelivery(delivery);
   }
 
-  Future<void> _openProfile() async {
-    if (_profileOpening) return;
-    _profileOpening = true;
-    _scaffoldKey.currentState?.closeDrawer();
-    await Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const RiderProfileScreen()));
-    _profileOpening = false;
-    if (mounted) setState(() => _tab = 0);
-  }
-
-  void _selectDrawerTab(int value) {
-    setState(() => _tab = value);
-    _scaffoldKey.currentState?.closeDrawer();
-  }
-
-  void _selectBottomTab(int value) {
-    if (value == 3) {
-      _openProfile();
-    } else {
-      setState(() => _tab = value);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final user = Api.I.user ?? {};
-    final name = (user['name'] ?? 'Rider').toString();
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      key: _scaffoldKey,
-      appBar: AppBar(
-        title: const Text(
-          'Rider Dashboard',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _loading ? null : _load,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          IconButton(
-            tooltip: 'Profile settings',
-            onPressed: _openProfile,
-            icon: const Icon(Icons.account_circle_outlined),
-          ),
-        ],
-      ),
-      drawer: _buildDrawer(name, user),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(onRefresh: _load, child: _buildPage(theme, name)),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: _selectBottomTab,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.delivery_dining_outlined),
-            selectedIcon: Icon(Icons.delivery_dining),
-            label: 'Deliveries',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.history_rounded),
-            label: 'History',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            label: 'Profile',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDrawer(String name, Map<String, dynamic> user) {
-    final avatar = user['avatar_url']?.toString();
-    return NavigationDrawer(
-      selectedIndex: _tab < 3 ? _tab : 0,
-      onDestinationSelected: _selectDrawerTab,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 16, 18),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: riderGreen.withValues(alpha: .12),
-                backgroundImage: avatar == null || avatar.isEmpty
-                    ? null
-                    : NetworkImage(avatar),
-                child: avatar == null || avatar.isEmpty
-                    ? const Icon(Icons.delivery_dining, color: riderGreen)
-                    : null,
+    return RiderVisualTheme(
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: riderDeepCoffee,
+          foregroundColor: Colors.white,
+          iconTheme: const IconThemeData(color: Colors.white),
+          automaticallyImplyLeading: false,
+          title: const SizedBox.shrink(),
+          actions: [
+            IconButton(
+              tooltip: 'Notifications',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    const Text('Delivery Rider'),
-                    const SizedBox(height: 5),
-                    _OnlineBadge(online: _available),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Divider(),
-        const NavigationDrawerDestination(
-          icon: Icon(Icons.home_outlined),
-          label: Text('Home'),
-        ),
-        const NavigationDrawerDestination(
-          icon: Icon(Icons.delivery_dining_outlined),
-          label: Text('My Deliveries'),
-        ),
-        const NavigationDrawerDestination(
-          icon: Icon(Icons.history_rounded),
-          label: Text('Delivery History'),
-        ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(28, 20, 16, 8),
-          child: Text(
-            'ACCOUNT',
-            style: TextStyle(
-              fontSize: 11,
-              letterSpacing: 1.2,
-              fontWeight: FontWeight.w700,
+              icon: const Icon(Icons.notifications_none_rounded),
             ),
-          ),
+          ],
         ),
-        ListTile(
-          leading: const Icon(Icons.settings_outlined),
-          title: const Text('Profile Settings'),
-          onTap: _openProfile,
+        body: RiderImageBackground(
+          image: _tab == 0
+              ? 'assets/images/rider.png'
+              : 'assets/images/all.png',
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(onRefresh: _load, child: _buildPage()),
         ),
-        ListTile(
-          leading: const Icon(Icons.help_outline_rounded),
-          title: const Text('Help & Support'),
-          onTap: () => _showInfo(
-            'Help & Support',
-            'For delivery or account help, contact your coffee shop administrator.',
-          ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: _selectBottomTab,
+          destinations: [
+            const NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home_rounded),
+              label: 'Home',
+            ),
+            NavigationDestination(
+              icon: _deliveriesNavIcon(Icons.delivery_dining_outlined),
+              selectedIcon: _deliveriesNavIcon(Icons.delivery_dining),
+              label: 'Deliveries',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.history_rounded),
+              label: 'History',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.person_outline_rounded),
+              label: 'Profile',
+            ),
+          ],
         ),
-        ListTile(
-          leading: const Icon(Icons.info_outline_rounded),
-          title: const Text('About'),
-          onTap: () =>
-              _showInfo('About', 'KJM Coffee Brew Rider\nDelivery partner app'),
-        ),
-        const Divider(),
-        ListTile(
-          leading: const Icon(Icons.logout_rounded, color: Colors.red),
-          title: const Text('Log Out'),
-          onTap: _logout,
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildPage(ThemeData theme, String name) {
-    if (_tab == 1) {
-      return _deliveryList(
-        _active,
-        'No assigned deliveries yet. Stay online to receive new assignments.',
-      );
-    }
+  Widget _deliveriesNavIcon(IconData icon) => Badge(
+    isLabelVisible: _activeDeliveryCount > 0,
+    label: Text('$_activeDeliveryCount'),
+    child: Icon(icon),
+  );
+
+  Widget _buildPage() {
+    if (_tab == 0) return _dashboardPage();
     if (_tab == 2) {
       return _deliveryList(
         _history,
         'Completed and declined deliveries will appear here.',
       );
     }
-    if (_tab == 3) {
-      return Center(
-        child: FilledButton.icon(
-          onPressed: _openProfile,
-          icon: const Icon(Icons.settings),
-          label: const Text('Open Profile Settings'),
-        ),
-      );
-    }
+    return _deliveryList(
+      _active,
+      _available
+          ? 'Deliveries assigned to you will appear here.'
+          : 'Go online when you are ready to receive delivery assignments.',
+    );
+  }
+
+  Widget _dashboardPage() {
+    final name = (Api.I.user?['name'] ?? 'Rider').toString();
+    final assigned = _active
+        .where((item) => item['status'] == 'assigned')
+        .toList();
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
@@ -449,7 +364,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
         _welcomeCard(name),
         const SizedBox(height: 14),
         _availabilityCard(),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
@@ -463,10 +378,10 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: _metric(
-                'Total deliveries',
-                '${_summary['total_deliveries'] ?? 0}',
+                'Active deliveries',
+                '$_activeDeliveryCount',
                 Icons.local_shipping_outlined,
-                theme.colorScheme.primary,
+                riderAccent(context),
               ),
             ),
           ],
@@ -479,7 +394,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                 'Distance traveled',
                 '${_summary['total_km'] ?? 0} km',
                 Icons.route_rounded,
-                theme.colorScheme.primary,
+                riderAccent(context),
               ),
             ),
             const SizedBox(width: 10),
@@ -488,39 +403,39 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                 'Cash to remit',
                 peso(dbl(_summary['cash_on_hand'])),
                 Icons.payments_outlined,
-                theme.colorScheme.primary,
+                riderAccent(context),
               ),
             ),
           ],
         ),
         const SizedBox(height: 18),
         _sectionHeader(
-          'Current delivery',
-          action: _active.isNotEmpty ? 'View all' : null,
+          'Assigned deliveries',
+          action: 'View all',
           onAction: () => setState(() => _tab = 1),
         ),
-        if (_active.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          _mapPreview(_active.first),
-          const SizedBox(height: 10),
-          _deliveryCard(_active.first),
-        ] else
+        const SizedBox(height: 8),
+        if (assigned.isEmpty)
           _emptyCard(
-            'No active delivery',
-            _available ? 'You are online and ready for an assignment.' : 'Go online when you are ready to receive delivery assignments.',
+            'No deliveries assigned yet',
+            _available
+                ? 'Deliveries assigned to you will appear here.'
+                : 'Go online when you are ready to receive delivery requests.',
             Icons.delivery_dining_rounded,
-          ),
-        const SizedBox(height: 18),
+          )
+        else
+          ...assigned.take(3).map(_deliveryCard),
+        const SizedBox(height: 12),
         _sectionHeader(
           'Recent activity',
-          action: _history.isNotEmpty ? 'History' : null,
+          action: 'History',
           onAction: () => setState(() => _tab = 2),
         ),
         const SizedBox(height: 8),
         if (_history.isEmpty)
           _emptyCard(
             'No delivery history',
-            'Your completed deliveries will show here.',
+            'Completed and declined deliveries will appear here.',
             Icons.history_rounded,
           )
         else
@@ -534,20 +449,37 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF176B67),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: riderGold.withValues(alpha: .85), width: 1.3),
+        image: const DecorationImage(
+          image: AssetImage('assets/images/rider.png'),
+          fit: BoxFit.cover,
+          alignment: Alignment.topCenter,
+          colorFilter: ColorFilter.mode(Color(0x882A1005), BlendMode.darken),
+        ),
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 27,
-            backgroundColor: Colors.white.withValues(alpha: .18),
-            backgroundImage: avatar == null || avatar.isEmpty
-                ? null
-                : NetworkImage(avatar),
-            child: avatar == null || avatar.isEmpty
-                ? const Icon(Icons.delivery_dining_rounded, color: Colors.white)
-                : null,
+          Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _openProfile,
+              child: CircleAvatar(
+                radius: 28,
+                backgroundColor: Colors.white.withValues(alpha: .18),
+                backgroundImage: avatar == null || avatar.isEmpty
+                    ? null
+                    : NetworkImage(avatar),
+                child: avatar == null || avatar.isEmpty
+                    ? const Icon(
+                        Icons.delivery_dining_rounded,
+                        color: Colors.white,
+                      )
+                    : null,
+              ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -566,38 +498,15 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Your delivery overview',
-                  style: TextStyle(color: Colors.white.withValues(alpha: .82)),
+                  'Delivery Rider',
+                  style: TextStyle(color: Colors.white.withValues(alpha: .85)),
                 ),
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .16),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.circle,
-                  size: 8,
-                  color: _available ? const Color(0xFF8BF0BB) : Colors.white70,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _available ? 'ONLINE' : 'OFFLINE',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: .4,
-                  ),
-                ),
-              ],
-            ),
+          _OnlineBadge(
+            online: _available,
+            label: _available ? 'ONLINE' : 'OFFLINE',
           ),
         ],
       ),
@@ -605,11 +514,8 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   }
 
   Widget _availabilityCard() => Card(
-    color: _available
-        ? riderGreen
-        : Theme.of(context).colorScheme.surfaceContainerHighest,
     child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
         children: [
           Icon(
@@ -617,10 +523,10 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                 ? Icons.wifi_tethering_rounded
                 : Icons.wifi_tethering_off_rounded,
             color: _available
-                ? Colors.white
-                : Theme.of(context).colorScheme.onSurfaceVariant,
+                ? const Color(0xFF228A60)
+                : riderSecondaryText(context),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -628,19 +534,16 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                 Text(
                   _available ? 'You are online' : 'You are offline',
                   style: TextStyle(
-                    color: _available ? Colors.white : null,
+                    color: riderPrimaryText(context),
                     fontWeight: FontWeight.w800,
-                    fontSize: 16,
                   ),
                 ),
                 Text(
                   _available
                       ? 'Ready to receive delivery assignments'
-                      : 'Turn on availability when you are ready',
+                      : 'Turn on availability when ready',
                   style: TextStyle(
-                    color: _available
-                        ? Colors.white70
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: riderSecondaryText(context),
                     fontSize: 12,
                   ),
                 ),
@@ -654,11 +557,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           else
-            Switch(
-              value: _available,
-              onChanged: _toggleAvailable,
-              activeThumbColor: Colors.white,
-            ),
+            Switch(value: _available, onChanged: _toggleAvailable),
         ],
       ),
     ),
@@ -666,20 +565,13 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
 
   Widget _metric(String label, String value, IconData icon, Color color) =>
       Card(
+        margin: EdgeInsets.zero,
         child: Padding(
-          padding: const EdgeInsets.all(13),
+          padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: .13),
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(icon, color: color),
-              ),
-              const SizedBox(width: 10),
+              Icon(icon, color: color, size: 25),
+              const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -688,9 +580,10 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                       value,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 17,
+                      style: TextStyle(
+                        color: riderPrimaryText(context),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
                       ),
                     ),
                     Text(
@@ -698,8 +591,8 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
+                        color: riderSecondaryText(context),
                         fontSize: 11,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -719,147 +612,16 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       Expanded(
         child: Text(
           title,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+          style: TextStyle(
+            color: riderPrimaryText(context),
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
       if (action != null) TextButton(onPressed: onAction, child: Text(action)),
     ],
   );
-
-  Widget _mapPreview(Map<String, dynamic> delivery) {
-    final order = delivery['order'] is Map
-        ? Map<String, dynamic>.from(delivery['order'] as Map)
-        : <String, dynamic>{};
-    final lat = double.tryParse('${order['lat'] ?? ''}');
-    final lng = double.tryParse('${order['lng'] ?? ''}');
-    if (lat == null || lng == null) {
-      return _emptyCard(
-        'Delivery map unavailable',
-        'The customer address does not include map coordinates.',
-        Icons.map_outlined,
-      );
-    }
-    final point = LatLng(lat, lng);
-    final route = routePointsFrom(delivery['route']);
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        height: 210,
-        child: ValueListenableBuilder<Position?>(
-          valueListenable: LocationService.I.position,
-          builder: (context, position, _) {
-            final gpsPoint = position == null
-                ? null
-                : LatLng(position.latitude, position.longitude);
-            final riderPoint = nearestRoadPoint(gpsPoint, route) ?? gpsPoint;
-            return Stack(
-              children: [
-                FlutterMap(
-                  options: MapOptions(
-                    initialCenter:
-                        riderPoint ?? (route.isNotEmpty ? route.first : point),
-                    initialZoom: 14,
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.kjmcoffeebrew.app',
-                    ),
-                    if (route.length > 1)
-                      PolylineLayer(
-                        polylines: [
-                          Polyline(
-                            points: route,
-                            color: const Color(0xFF168A83),
-                            strokeWidth: 5,
-                          ),
-                        ],
-                      ),
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: point,
-                          width: 44,
-                          height: 44,
-                          child: const Icon(
-                            Icons.location_on_rounded,
-                            color: Color(0xFFD34A4A),
-                            size: 40,
-                          ),
-                        ),
-                        if (riderPoint != null)
-                          Marker(
-                            point: riderPoint,
-                            width: 44,
-                            height: 44,
-                            child: Container(
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF176B67),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.delivery_dining_rounded,
-                                color: Colors.white,
-                                size: 29,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-                Positioned(
-                  left: 12,
-                  top: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface
-                          .withValues(alpha: .95),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.circle,
-                          size: 9,
-                          color: Color(0xFF168A83),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          route.length > 1 ? 'RIDER LIVE' : 'CUSTOMER LOCATION',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: .4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  bottom: 12,
-                  child: FilledButton.icon(
-                    onPressed: () => _openDelivery(delivery),
-                    icon: const Icon(Icons.navigation_rounded),
-                    label: const Text('Open delivery'),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
 
   Widget _deliveryList(List<Map<String, dynamic>> items, String empty) =>
       ListView(
@@ -876,9 +638,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
             _tab == 1
                 ? 'Manage your assigned orders and delivery steps.'
                 : 'Review your recent delivery activity.',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+            style: TextStyle(color: riderSecondaryText(context)),
           ),
           const SizedBox(height: 12),
           if (items.isEmpty)
@@ -896,7 +656,14 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
         ? Map<String, dynamic>.from(delivery['customer'] as Map)
         : <String, dynamic>{};
     final status = delivery['status']?.toString() ?? 'assigned';
-    final scheme = Theme.of(context).colorScheme;
+    final rawItems = order['items'];
+    final items = rawItems is List
+        ? rawItems
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList()
+        : <Map<String, dynamic>>[];
+    final isAvailableRequest = (_tab == 0 || _tab == 1) && status == 'assigned';
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: InkWell(
@@ -921,6 +688,28 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                   ),
                 ],
               ),
+              if (items.isNotEmpty) ...[
+                const SizedBox(height: 9),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.receipt_long_outlined, size: 18),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        items
+                            .map(
+                              (item) =>
+                                  '${item['qty'] ?? 1} × ${item['name'] ?? 'Item'}',
+                            )
+                            .join(', '),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -961,14 +750,39 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                     (order['payment_method']?.toString() ?? 'payment')
                         .toUpperCase(),
                     style: TextStyle(
-                      color: scheme.onSurfaceVariant,
+                      color: riderSecondaryText(context),
                       fontSize: 11,
                     ),
                   ),
-                  const Spacer(),
-                  const Icon(Icons.chevron_right_rounded),
+                  if (!isAvailableRequest) ...[
+                    const Spacer(),
+                    const Icon(Icons.chevron_right_rounded),
+                  ],
                 ],
               ),
+              if (isAvailableRequest) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _acceptingDeliveryId == null
+                        ? () => _acceptDelivery(delivery)
+                        : null,
+                    icon: _acceptingDeliveryId == delivery['id']
+                        ? const SizedBox(
+                            width: 17,
+                            height: 17,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.check_rounded),
+                    label: Text(
+                      _acceptingDeliveryId == delivery['id']
+                          ? 'Accepting…'
+                          : 'Accept Delivery',
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -981,20 +795,14 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Column(
         children: [
-          Icon(
-            icon,
-            size: 38,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
+          Icon(icon, size: 38, color: riderSecondaryText(context)),
           const SizedBox(height: 8),
           Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+            style: TextStyle(color: riderSecondaryText(context)),
           ),
         ],
       ),
@@ -1026,23 +834,6 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       ],
     ),
   );
-
-  void _showInfo(String title, String body) {
-    Navigator.pop(context);
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _OnlineBadge extends StatelessWidget {
@@ -1054,7 +845,7 @@ class _OnlineBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = online
         ? const Color(0xFF228A60)
-        : Theme.of(context).colorScheme.onSurfaceVariant;
+        : riderSecondaryText(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(

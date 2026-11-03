@@ -42,10 +42,9 @@ class KjmApp extends StatelessWidget {
           nextScreen: Api.I.loggedIn
               ? homeForRole(Api.I.role)
               : const GetStartedScreen(),
+          onCompleted: PushNotifications.I.markNavigationReady,
         ),
       ),
     );
   }
 }
-
-

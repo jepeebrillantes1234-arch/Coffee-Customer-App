@@ -4,14 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/api.dart';
-import '../core/theme.dart';
 import '../core/util.dart';
 import 'rider_theme.dart';
 
-/// Patunay ng delivery: larawan + cash na natanggap (kung COD).
+/// Confirms delivery using the existing photo and COD collection API.
 class RiderProofScreen extends StatefulWidget {
   final int deliveryId;
   final Map<String, dynamic> order;
+
   const RiderProofScreen({
     super.key,
     required this.deliveryId,
@@ -47,18 +47,18 @@ class _RiderProofScreenState extends State<RiderProofScreen> {
 
   Future<void> _take() async {
     try {
-      final x = await ImagePicker().pickImage(
+      final photo = await ImagePicker().pickImage(
         source: ImageSource.camera,
         imageQuality: 70,
         maxWidth: 1400,
       );
-      if (x != null && mounted) setState(() => _photo = x);
-    } catch (e) {
+      if (photo != null && mounted) setState(() => _photo = photo);
+    } catch (_) {
       if (mounted) {
-        setState(
-          () => _error =
-              'Could not open the camera. Allow camera access in Settings.',
-        );
+        setState(() {
+          _error =
+              'Could not open the camera. Allow camera access in Settings.';
+        });
       }
     }
   }
@@ -68,14 +68,15 @@ class _RiderProofScreenState extends State<RiderProofScreen> {
       setState(() => _error = 'Take a photo as delivery proof first.');
       return;
     }
+
     double? cash;
     if (_cod) {
       cash = double.tryParse(_cash.text.trim());
       if (cash == null || cash < _total) {
-        setState(
-          () => _error =
-              'The cash received must cover the order total of ${peso(_total)}.',
-        );
+        setState(() {
+          _error =
+              'Cash received must cover the order total of ${peso(_total)}.';
+        });
         return;
       }
     }
@@ -90,13 +91,15 @@ class _RiderProofScreenState extends State<RiderProofScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _cod ? 'Delivered! Hand the cash to the shop staff.' : 'Delivered!',
+            _cod
+                ? 'Delivery submitted. Please hand the cash to shop staff.'
+                : 'Delivery proof submitted successfully.',
           ),
         ),
       );
       Navigator.of(context).pop(true);
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -104,148 +107,304 @@ class _RiderProofScreenState extends State<RiderProofScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final entered = double.tryParse(_cash.text.trim());
-    final differs = _cod && entered != null && (entered - _total).abs() > 0.009;
-    final secondary = Theme.of(context).colorScheme.onSurfaceVariant;
+    final received = double.tryParse(_cash.text.trim());
+    final differs =
+        _cod && received != null && (received - _total).abs() > .009;
+    final secondary = riderSecondaryText(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Delivery Proof')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            '${widget.order['order_number']}',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 14),
-
-          // 1. LARAWAN
-          const Text(
-            '1. Photo of the delivered order',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Photograph the order with the customer or at the delivery address.',
-            style: TextStyle(fontSize: 12.5, color: secondary),
-          ),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: _take,
-            child: Container(
-              height: 240,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.black12),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: _photo == null
-                  ? const Center(
+    return RiderVisualTheme(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Delivery confirmation')),
+        body: RiderImageBackground(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+            children: [
+              _sectionCard(
+                context,
+                child: Row(
+                  children: [
+                    const Icon(Icons.receipt_long_outlined, color: riderGold),
+                    const SizedBox(width: 12),
+                    Expanded(
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.photo_camera, size: 48, color: riderGreen),
-                          SizedBox(height: 6),
-                          Text('Tap to take a photo'),
+                          Text(
+                            'Order ${widget.order['order_number'] ?? ''}',
+                            style: TextStyle(
+                              color: riderPrimaryText(context),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Add a clear delivery photo${_cod ? ' and confirm the cash received' : ''}.',
+                            style: TextStyle(color: secondary, height: 1.4),
+                          ),
                         ],
                       ),
-                    )
-                  : Image.file(
-                      File(_photo!.path),
-                      fit: BoxFit.cover,
-                      width: double.infinity,
                     ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(46),
-            ),
-            onPressed: _busy ? null : _take,
-            icon: const Icon(Icons.photo_camera_outlined),
-            label: Text(_photo == null ? 'Take photo' : 'Retake photo'),
-          ),
-
-          // 2. CASH
-          if (_cod) ...[
-            const SizedBox(height: 20),
-            const Text(
-              '2. Cash received',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Amount due from customer: ${peso(_total)}',
-              style: TextStyle(fontSize: 12.5, color: secondary),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _cash,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+                  ],
+                ),
               ),
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                prefixText: '₱ ',
-                border: OutlineInputBorder(),
-                filled: true,
+              const SizedBox(height: 14),
+              _sectionCard(
+                context,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionTitle(
+                      context,
+                      '1. Delivery photo',
+                      Icons.camera_alt_outlined,
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      'Take a clear photo showing the order at the customer location.',
+                      style: TextStyle(color: secondary, height: 1.4),
+                    ),
+                    const SizedBox(height: 14),
+                    GestureDetector(
+                      onTap: _busy ? null : _take,
+                      child: Container(
+                        height: 220,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(17),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outlineVariant,
+                          ),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: _photo == null
+                            ? Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.add_a_photo_outlined,
+                                    size: 42,
+                                    color: riderAccent(context),
+                                  ),
+                                  const SizedBox(height: 9),
+                                  Text(
+                                    'No photo added',
+                                    style: TextStyle(
+                                      color: riderPrimaryText(context),
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Tap the button below to open the camera',
+                                    style: TextStyle(
+                                      color: secondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Image.file(
+                                File(_photo!.path),
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                      onPressed: _busy ? null : _take,
+                      icon: Icon(
+                        _photo == null
+                            ? Icons.photo_camera_outlined
+                            : Icons.refresh_rounded,
+                      ),
+                      label: Text(
+                        _photo == null ? 'Take delivery photo' : 'Retake photo',
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            if (differs)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  '⚠ The order is recorded at ${peso(_total)}. Return any extra cash to the customer as change.',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onTertiaryContainer,
-                    fontSize: 12.5,
+              if (_cod) ...[
+                const SizedBox(height: 14),
+                _sectionCard(
+                  context,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _sectionTitle(
+                        context,
+                        '2. Cash on delivery',
+                        Icons.payments_outlined,
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(13),
+                        decoration: BoxDecoration(
+                          color: riderMutedTeal,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Amount due',
+                              style: TextStyle(
+                                color: riderCoffee,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              peso(_total),
+                              style: const TextStyle(
+                                color: riderCoffee,
+                                fontSize: 23,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _cash,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          labelText: 'Cash received from customer',
+                          prefixText: '₱ ',
+                          prefixIcon: Icon(
+                            Icons.account_balance_wallet_outlined,
+                          ),
+                          helperText: 'Enter the full amount handed to you.',
+                        ),
+                      ),
+                      if (differs)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Text(
+                            'The order total is ${peso(_total)}. Please return any extra cash as change.',
+                            style: TextStyle(
+                              color: riderPrimaryText(context),
+                              height: 1.4,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(13),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outlineVariant,
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.info_outline_rounded,
+                              color: riderAccent(context),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 9),
+                            Expanded(
+                              child: Text(
+                                'Hand the collected COD cash to shop staff. Staff will confirm receipt separately.',
+                                style: TextStyle(
+                                  color: riderPrimaryText(context),
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.tertiaryContainer,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                ),
-              ),
-              child: Text(
-                '💵 Hand the cash to the shop staff. The order will be completed after they receive the payment.',
-                style: TextStyle(
-                  height: 1.4,
-                  color: Theme.of(context).colorScheme.onTertiaryContainer,
-                ),
-              ),
-            ),
-          ],
-
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
-          ],
-          const SizedBox(height: 18),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: success),
-            onPressed: _busy ? null : _submit,
-            child: _busy
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onErrorContainer,
                     ),
-                  )
-                : const Text('Submit delivery'),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: riderGreen,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(52),
+                ),
+                onPressed: _busy ? null : _submit,
+                icon: _busy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.check_circle_outline_rounded),
+                label: Text(
+                  _busy ? 'Submitting proof…' : 'Submit delivery proof',
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-        ],
+        ),
       ),
     );
   }
+
+  Widget _sectionCard(BuildContext context, {required Widget child}) => Card(
+    margin: EdgeInsets.zero,
+    child: Padding(padding: const EdgeInsets.all(16), child: child),
+  );
+
+  Widget _sectionTitle(BuildContext context, String title, IconData icon) =>
+      Row(
+        children: [
+          Icon(icon, color: riderAccent(context)),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                color: riderPrimaryText(context),
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      );
 }

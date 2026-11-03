@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api.dart';
 import '../core/realtime.dart';
+import '../rider/rider_theme.dart';
 
 /// Order-bound private conversation between a customer and assigned rider.
 /// [targetId] is an order ID for customers and a delivery ID for riders.
@@ -38,6 +39,9 @@ class _RiderChatScreenState extends State<RiderChatScreen> {
   @override
   void initState() {
     super.initState();
+    if (!widget.isRider) {
+      Realtime.I.activeCustomerRiderChatOrderId = widget.targetId;
+    }
     _load();
     Realtime.I.connect();
     _live = Realtime.I.updates.listen((event) {
@@ -55,6 +59,10 @@ class _RiderChatScreenState extends State<RiderChatScreen> {
 
   @override
   void dispose() {
+    if (!widget.isRider &&
+        Realtime.I.activeCustomerRiderChatOrderId == widget.targetId) {
+      Realtime.I.activeCustomerRiderChatOrderId = null;
+    }
     _poller?.cancel();
     _live?.cancel();
     _input.dispose();
@@ -185,7 +193,7 @@ class _RiderChatScreenState extends State<RiderChatScreen> {
     final title = name == null || name.isEmpty
         ? (widget.isRider ? 'Customer' : 'Delivery rider')
         : name;
-    return Scaffold(
+    final screen = Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
         title: Row(
@@ -229,186 +237,192 @@ class _RiderChatScreenState extends State<RiderChatScreen> {
           ],
         ),
       ),
-      body: Column(
-        children: [
-          if (_error != null)
-            Material(
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: ListTile(
-                dense: true,
-                leading: const Icon(Icons.cloud_off_outlined),
-                title: Text(_error!),
-                trailing: IconButton(
-                  tooltip: 'Retry',
-                  onPressed: () => _load(),
-                  icon: const Icon(Icons.refresh_rounded),
+      body: RiderImageBackground(
+        enabled: widget.isRider,
+        child: Column(
+          children: [
+            if (_error != null)
+              Material(
+                color: Theme.of(context).colorScheme.errorContainer,
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.cloud_off_outlined),
+                  title: Text(_error!),
+                  trailing: IconButton(
+                    tooltip: 'Retry',
+                    onPressed: () => _load(),
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
                 ),
               ),
-            ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _messages.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(28),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.forum_outlined,
-                            size: 48,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Start the conversation',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 5),
-                          const Text(
-                            'Messages here are only shared between the customer and assigned rider.',
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _messages.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(28),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.forum_outlined,
+                              size: 48,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Start the conversation',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 5),
+                            const Text(
+                              'Messages here are only shared between the customer and assigned rider.',
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scroll,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 18,
-                    ),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      final message = _messages[index];
-                      final mine =
-                          '${message['sender_id']}' == '${Api.I.user?['id']}';
-                      final time = DateTime.tryParse(
-                        '${message['created_at'] ?? ''}',
-                      )?.toLocal();
-                      return Align(
-                        alignment: mine
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
-                        child: Container(
-                          constraints: BoxConstraints(
-                            maxWidth: MediaQuery.sizeOf(context).width * .78,
-                          ),
-                          margin: const EdgeInsets.only(bottom: 9),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: mine
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest,
-                            borderRadius: BorderRadius.only(
-                              topLeft: const Radius.circular(16),
-                              topRight: const Radius.circular(16),
-                              bottomLeft: Radius.circular(mine ? 16 : 4),
-                              bottomRight: Radius.circular(mine ? 4 : 16),
+                    )
+                  : ListView.builder(
+                      controller: _scroll,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 18,
+                      ),
+                      itemCount: _messages.length,
+                      itemBuilder: (context, index) {
+                        final message = _messages[index];
+                        final mine =
+                            '${message['sender_id']}' == '${Api.I.user?['id']}';
+                        final time = DateTime.tryParse(
+                          '${message['created_at'] ?? ''}',
+                        )?.toLocal();
+                        return Align(
+                          alignment: mine
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: Container(
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.sizeOf(context).width * .78,
+                            ),
+                            margin: const EdgeInsets.only(bottom: 9),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: mine
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerHighest,
+                              borderRadius: BorderRadius.only(
+                                topLeft: const Radius.circular(16),
+                                topRight: const Radius.circular(16),
+                                bottomLeft: Radius.circular(mine ? 16 : 4),
+                                bottomRight: Radius.circular(mine ? 4 : 16),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    message['body']?.toString() ?? '',
+                                    style: TextStyle(
+                                      color: mine
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .onPrimary
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                                if (time != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: mine
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .onPrimary
+                                                .withValues(alpha: .75)
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  message['body']?.toString() ?? '',
-                                  style: TextStyle(
-                                    color: mine
-                                        ? Theme.of(context)
-                                              .colorScheme
-                                              .onPrimary
-                                        : null,
-                                  ),
-                                ),
-                              ),
-                              if (time != null) ...[
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: mine
-                                        ? Theme.of(context)
-                                              .colorScheme
-                                              .onPrimary
-                                              .withValues(alpha: .75)
-                                        : Theme.of(context)
-                                              .colorScheme
-                                              .onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
+            ),
+            if (_closed)
+              const SafeArea(
+                top: false,
+                child: Padding(
+                  padding: EdgeInsets.all(14),
+                  child: Text(
+                    'This delivery conversation is closed.',
+                    textAlign: TextAlign.center,
                   ),
-          ),
-          if (_closed)
-            const SafeArea(
-              top: false,
-              child: Padding(
-                padding: EdgeInsets.all(14),
-                child: Text(
-                  'This delivery conversation is closed.',
-                  textAlign: TextAlign.center,
                 ),
-              ),
-            )
-          else
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _input,
-                        minLines: 1,
-                        maxLines: 5,
-                        textCapitalization: TextCapitalization.sentences,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) => _send(),
-                        decoration: const InputDecoration(
-                          hintText: 'Write a message…',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
+              )
+            else
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _input,
+                          minLines: 1,
+                          maxLines: 5,
+                          textCapitalization: TextCapitalization.sentences,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _send(),
+                          decoration: const InputDecoration(
+                            hintText: 'Write a message…',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filled(
-                      tooltip: 'Send message',
-                      onPressed: _sending ? null : _send,
-                      icon: _sending
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.send_rounded),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      IconButton.filled(
+                        tooltip: 'Send message',
+                        onPressed: _sending ? null : _send,
+                        icon: _sending
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.send_rounded),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
+    return widget.isRider ? RiderVisualTheme(child: screen) : screen;
   }
 }

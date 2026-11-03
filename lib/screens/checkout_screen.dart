@@ -29,6 +29,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _promo = TextEditingController();
 
   Map<String, dynamic>? _quote;
+  Map<String, dynamic>? _shopHours;
   String? _error;
   bool _quoting = false;
   bool _placing = false;
@@ -40,7 +41,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.initState();
     if (AppState.online) _paymentMethod = 'qrph';
     _promo.text = SelectedPromo.I.code ?? ''; // Automatic code from Home
+    _loadShopHours();
     _loadDefaultDeliveryAddress();
+  }
+
+  Future<void> _loadShopHours() async {
+    try {
+      final config = await Api.I.appConfig();
+      final settings = config['settings'];
+      final hours = settings is Map ? settings['shop_operating_hours'] : null;
+      if (!mounted) return;
+      setState(
+        () =>
+            _shopHours = hours is Map ? Map<String, dynamic>.from(hours) : null,
+      );
+    } catch (_) {
+      // The checkout preview and order endpoint remain authoritative.
+    }
   }
 
   Future<void> _loadDefaultDeliveryAddress() async {
@@ -183,9 +200,60 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   bool get _canPlace =>
       _quote != null &&
+      !(_shopHours?['is_open'] == false || _shopHours?['is_open'] == 0) &&
       !_quoting &&
       !_placing &&
       (_type == 'pickup' || (_pin != null && _address.text.trim().isNotEmpty));
+
+  Widget _shopHoursCard(bool closed) {
+    final hours = _shopHours!;
+    String display(dynamic value) {
+      final pieces = '$value'.split(':');
+      if (pieces.length < 2) return '$value';
+      final hour = int.tryParse(pieces[0]);
+      final minute = int.tryParse(pieces[1]);
+      if (hour == null || minute == null) return '$value';
+      return '${hour % 12 == 0 ? 12 : hour % 12}:${minute.toString().padLeft(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}';
+    }
+
+    final color = closed ? Colors.red.shade700 : Colors.green.shade700;
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.storefront_outlined, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  closed ? 'Shop is closed' : 'Shop is open',
+                  style: TextStyle(fontWeight: FontWeight.w700, color: color),
+                ),
+                Text(
+                  hours['is_configured'] == false
+                      ? 'Operating hours have not been configured yet.'
+                      : 'Operating hours: ${display(hours['opening_time'])} to ${display(hours['closing_time'])} (Philippine time)',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if (closed)
+                  const Text(
+                    'New orders can be placed during operating hours.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _sectionCard({required Widget child}) => Container(
     decoration: BoxDecoration(
@@ -215,6 +283,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ? Cart.I.subtotal
         : dbl(quote['subtotal']);
     final needsDeliveryAddress = _type == 'delivery' && _pin == null;
+    final shopClosed =
+        _shopHours?['is_open'] == false || _shopHours?['is_open'] == 0;
     final displayedTotal = quote == null || needsDeliveryAddress
         ? null
         : dbl(quote['total']);
@@ -237,6 +307,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
               children: [
+                if (_shopHours != null) ...[
+                  _shopHoursCard(shopClosed),
+                  const SizedBox(height: 14),
+                ],
                 SegmentedButton<String>(
                   segments: const [
                     ButtonSegment(

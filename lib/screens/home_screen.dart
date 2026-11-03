@@ -32,6 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _bannerLoading = true;
   String? _error;
   String? _bannerError;
+  Map<String, dynamic>? _shopHours;
   int _unread = 0;
   int _bannerIndex = 0;
   final PageController _bannerController = PageController();
@@ -78,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final cats = await Api.I.categories();
       final prods = await Api.I.products();
       Map<String, dynamic>? cfg;
+      Map<String, dynamic>? publicShopHours;
       String? bannerError;
       var banners = <Map<String, dynamic>>[];
       var bannersLoaded = false;
@@ -98,6 +100,12 @@ class _HomeScreenState extends State<HomeScreen> {
           bannersLoaded = true;
         } catch (error) {
           debugPrint('Personalized home config request failed: $error');
+        }
+      } else {
+        try {
+          publicShopHours = await Api.I.shopHours();
+        } catch (error) {
+          debugPrint('Public shop hours request failed: $error');
         }
       }
 
@@ -132,6 +140,13 @@ class _HomeScreenState extends State<HomeScreen> {
           AppState.online =
               cfg['payment_mode'] == 'online' ||
               (cfg['settings'] as Map?)?['payment_method'] == 'online';
+          final settings = cfg['settings'];
+          final hours = settings is Map
+              ? settings['shop_operating_hours']
+              : null;
+          _shopHours = hours is Map ? Map<String, dynamic>.from(hours) : null;
+        } else if (publicShopHours != null) {
+          _shopHours = publicShopHours;
         }
         _error = null;
         _loading = false;
@@ -400,9 +415,56 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 4),
               _homeBanner(),
+              if (_shopHours != null) ...[
+                const SizedBox(height: 10),
+                _shopHoursStatus(),
+              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  String _displayShopTime(dynamic value) {
+    final parts = '$value'.split(':');
+    if (parts.length < 2) return '$value';
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return '$value';
+    final suffix = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+    return '$displayHour:${minute.toString().padLeft(2, '0')} $suffix';
+  }
+
+  Widget _shopHoursStatus() {
+    final hours = _shopHours!;
+    final isOpen = hours['is_open'] == true || hours['is_open'] == 1;
+    final color = isOpen ? Colors.green.shade700 : Colors.red.shade700;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.storefront_outlined, color: color, size: 20),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              hours['is_configured'] == false
+                  ? '${isOpen ? 'Open' : 'Closed'} - Operating hours not configured'
+                  : '${isOpen ? 'Open' : 'Closed'} - ${_displayShopTime(hours['opening_time'])} to ${_displayShopTime(hours['closing_time'])}',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ),
+          Text('Asia/Manila', style: Theme.of(context).textTheme.bodySmall),
+        ],
       ),
     );
   }

@@ -3,6 +3,12 @@ import 'package:image_picker/image_picker.dart';
 
 import '../core/api.dart';
 import '../core/theme.dart';
+import '../screens/auth_screen.dart';
+import '../screens/customer_service_sheet.dart';
+import '../screens/notifications_screen.dart';
+import 'rider_home_screen.dart';
+import 'rider_location_service.dart';
+import 'rider_reports_screen.dart';
 import 'rider_theme.dart';
 
 class RiderProfileScreen extends StatefulWidget {
@@ -23,15 +29,34 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
   final _newPassword = TextEditingController();
   final _confirmPassword = TextEditingController();
   bool _loading = true;
-  bool _saving = false;
-  bool _savingPassword = false;
-  bool _showPasswordForm = false;
+  bool _availabilityBusy = false;
+  bool _available = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _restoreActiveTracking();
+  }
+
+  Future<void> _restoreActiveTracking() async {
+    try {
+      final response = await Api.I.deliveries();
+      final items = response['items'];
+      if (items is! List) return;
+      final ids = items
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((delivery) => delivery['status'] == 'on_the_way')
+          .map((delivery) => delivery['id'])
+          .whereType<num>()
+          .map((id) => id.toInt())
+          .toSet();
+      await LocationService.I.syncActiveDeliveries(ids);
+    } catch (_) {
+      // Keep the current location service state if the network is unavailable.
+    }
   }
 
   @override
@@ -67,6 +92,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
       _vehicle.text = rider['vehicle_type']?.toString() ?? '';
       _plate.text = rider['plate_number']?.toString() ?? '';
       _license.text = rider['license_no']?.toString() ?? '';
+      _available = rider['is_available'] == true;
     } on ApiException catch (e) {
       _error = e.message;
     } catch (_) {
@@ -76,13 +102,11 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
     }
   }
 
-  Future<void> _save() async {
+  Future<String?> _save() async {
     if (_name.text.trim().isEmpty) {
-      setState(() => _error = 'Enter your full name.');
-      return;
+      return 'Enter your full name.';
     }
     setState(() {
-      _saving = true;
       _error = null;
     });
     try {
@@ -100,32 +124,22 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
           const SnackBar(content: Text('Profile settings saved.')),
         );
       }
+      return null;
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      return e.message;
     } catch (_) {
-      if (mounted) {
-        setState(
-          () => _error = 'Could not save your profile. Please try again.',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
+      return 'Could not save your profile. Please try again.';
     }
   }
 
-  Future<void> _savePassword() async {
+  Future<String?> _savePassword() async {
     if (_newPassword.text.length < 8) {
-      setState(
-        () => _error = 'Your new password must contain at least 8 characters.',
-      );
-      return;
+      return 'Your new password must contain at least 8 characters.';
     }
     if (_newPassword.text != _confirmPassword.text) {
-      setState(() => _error = 'The new passwords do not match.');
-      return;
+      return 'The new passwords do not match.';
     }
     setState(() {
-      _savingPassword = true;
       _error = null;
     });
     try {
@@ -138,21 +152,15 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
       _newPassword.clear();
       _confirmPassword.clear();
       if (mounted) {
-        setState(() => _showPasswordForm = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Password changed successfully.')),
         );
       }
+      return null;
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      return e.message;
     } catch (_) {
-      if (mounted) {
-        setState(
-          () => _error = 'Could not change your password. Please try again.',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _savingPassword = false);
+      return 'Could not change your password. Please try again.';
     }
   }
 
@@ -175,257 +183,790 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
     }
   }
 
+  Future<void> _openEditProfile(String? avatar) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => RiderEditProfileScreen(
+          name: _name,
+          email: _email,
+          phone: _phone,
+          vehicle: _vehicle,
+          plate: _plate,
+          license: _license,
+          getAvatarUrl: () => Api.I.user?['avatar_url']?.toString() ?? avatar,
+          onSave: _save,
+          onChangePhoto: _changePhoto,
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openChangePassword() => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => RiderChangePasswordScreen(
+        currentPassword: _currentPassword,
+        newPassword: _newPassword,
+        confirmPassword: _confirmPassword,
+        onSave: _savePassword,
+      ),
+    ),
+  );
+
+  Future<void> _openSettings() => showDialog<void>(
+    context: context,
+    builder: (_) => AnimatedBuilder(
+      animation: AppThemeController.I,
+      builder: (context, _) {
+        final dark = AppThemeController.I.mode == ThemeMode.dark;
+        return AlertDialog(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
+          content: SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            secondary: Icon(
+              dark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            title: Text(dark ? 'Dark Mode' : 'Light Mode'),
+            value: dark,
+            onChanged: (enabled) => AppThemeController.I.setMode(
+              enabled ? ThemeMode.dark : ThemeMode.light,
+            ),
+          ),
+        );
+      },
+    ),
+  );
+
+  Future<void> _openWorkArea(int tab) async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => RiderHomeScreen(initialTab: tab)));
+  }
+
+  Future<void> _toggleAvailability(bool available) async {
+    if (_availabilityBusy) return;
+    setState(() => _availabilityBusy = true);
+    try {
+      final result = await Api.I.setAvailability(available);
+      if (mounted) setState(() => _available = result);
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _availabilityBusy = false);
+    }
+  }
+
+  Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text(
+          'You will need to sign in again to access your rider account.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Stay'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await LocationService.I.stop();
+    await Api.I.logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AuthScreen()),
+      (_) => false,
+    );
+  }
+
+  void _openAbout() {
+    showAboutDialog(
+      context: context,
+      applicationName: 'KJM Coffee Shop Rider',
+      applicationVersion: 'Delivery partner app',
+      applicationIcon: const Icon(Icons.delivery_dining_rounded),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = Api.I.user ?? {};
     final avatar = user['avatar_url']?.toString();
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Profile Settings')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Center(
-                  child: Column(
-                    children: [
-                      Stack(
-                        children: [
-                          CircleAvatar(
-                            radius: 45,
-                            backgroundColor: riderAccent(context)
-                                .withValues(alpha: .12),
-                            backgroundImage: avatar == null || avatar.isEmpty
-                                ? null
-                                : NetworkImage(avatar),
-                            child: avatar == null || avatar.isEmpty
-                                ? Icon(
-                                    Icons.person_rounded,
-                                    size: 48,
-                                    color: riderAccent(context),
-                                  )
-                                : null,
-                          ),
-                          Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: IconButton.filled(
-                              onPressed: _changePhoto,
-                              icon: const Icon(Icons.camera_alt_outlined),
-                              tooltip: 'Change profile photo',
-                            ),
-                          ),
-                        ],
+    return RiderVisualTheme(
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: riderDeepCoffee,
+          foregroundColor: Colors.white,
+          title: const Text('Rider Profile'),
+          actions: [
+            IconButton(
+              tooltip: 'Settings',
+              onPressed: _openSettings,
+              icon: const Icon(Icons.settings_outlined),
+            ),
+          ],
+        ),
+        body: RiderImageBackground(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _profileHero(context, avatar),
+                    const SizedBox(height: 16),
+                    _profileQuickInfo(context),
+                    const SizedBox(height: 10),
+                    SwitchListTile.adaptive(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      secondary: Icon(
+                        _available
+                            ? Icons.wifi_tethering_rounded
+                            : Icons.wifi_tethering_off_rounded,
+                        color: _available
+                            ? const Color(0xFF228A60)
+                            : riderSecondaryText(context),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _name.text.isEmpty ? 'Rider' : _name.text,
-                        style: const TextStyle(
-                          fontSize: 19,
+                      title: Text(
+                        _available ? 'Online' : 'Offline',
+                        style: TextStyle(
+                          color: riderPrimaryText(context),
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      const Text('Delivery Rider'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                _section('Personal Information', Icons.person_outline, [
-                  _field('Full name', _name, icon: Icons.badge_outlined),
-                  const SizedBox(height: 12),
-                  _field(
-                    'Email address',
-                    _email,
-                    icon: Icons.email_outlined,
-                    readOnly: true,
-                  ),
-                  const SizedBox(height: 12),
-                  _field(
-                    'Phone number',
-                    _phone,
-                    icon: Icons.phone_outlined,
-                    keyboard: TextInputType.phone,
-                  ),
-                ]),
-                const SizedBox(height: 14),
-                _section('Vehicle Information', Icons.two_wheeler_outlined, [
-                  _field(
-                    'Vehicle type',
-                    _vehicle,
-                    icon: Icons.directions_bike_outlined,
-                    hint: 'Motorcycle, bicycle, etc.',
-                  ),
-                  const SizedBox(height: 12),
-                  _field('Plate number', _plate, icon: Icons.pin_outlined),
-                  const SizedBox(height: 12),
-                  _field(
-                    'License number',
-                    _license,
-                    icon: Icons.credit_card_outlined,
-                  ),
-                ]),
-                const SizedBox(height: 14),
-                _section('Preferences', Icons.tune_rounded, [
-                  AnimatedBuilder(
-                    animation: AppThemeController.I,
-                    builder: (context, _) {
-                      final mode = AppThemeController.I.mode;
-                      return SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Dark mode'),
-                        subtitle: const Text(
-                          'Use a darker appearance in the app',
-                        ),
-                        secondary: Icon(
-                          mode == ThemeMode.dark
-                              ? Icons.dark_mode_outlined
-                              : Icons.light_mode_outlined,
-                        ),
-                        value: mode == ThemeMode.dark,
-                        onChanged: (enabled) => AppThemeController.I.setMode(
-                          enabled ? ThemeMode.dark : ThemeMode.light,
-                        ),
-                      );
-                    },
-                  ),
-                ]),
-                const SizedBox(height: 14),
-                Card(
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.lock_outline),
-                        title: const Text('Change Password'),
-                        trailing: Icon(
-                          _showPasswordForm
-                              ? Icons.expand_less
-                              : Icons.chevron_right,
-                        ),
-                        onTap: () => setState(() {
-                          _showPasswordForm = !_showPasswordForm;
-                          _error = null;
-                        }),
+                      subtitle: Text(
+                        _available
+                            ? 'Ready to receive delivery assignments'
+                            : 'Turn on to receive new delivery assignments',
+                        style: TextStyle(color: riderSecondaryText(context)),
                       ),
-                      if (_showPasswordForm)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          child: Column(
-                            children: [
-                              _field(
-                                'Current password',
-                                _currentPassword,
-                                password: true,
-                              ),
-                              const SizedBox(height: 10),
-                              _field(
-                                'New password',
-                                _newPassword,
-                                password: true,
-                              ),
-                              const SizedBox(height: 10),
-                              _field(
-                                'Confirm new password',
-                                _confirmPassword,
-                                password: true,
-                              ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: FilledButton(
-                                  onPressed: _savingPassword
-                                      ? null
-                                      : _savePassword,
-                                  child: _savingPassword
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Text('Save Password'),
-                                ),
-                              ),
-                            ],
+                      value: _available,
+                      onChanged: _availabilityBusy ? null : _toggleAvailability,
+                    ),
+                    const SizedBox(height: 18),
+                    _menuSection(context, 'Account', [
+                      _menuTile(
+                        context,
+                        Icons.edit_outlined,
+                        'Edit Profile',
+                        'Update your personal and vehicle information',
+                        () => _openEditProfile(avatar),
+                      ),
+                      _menuTile(
+                        context,
+                        Icons.lock_outline_rounded,
+                        'Change Password',
+                        'Update your account password',
+                        _openChangePassword,
+                      ),
+                    ]),
+                    const SizedBox(height: 14),
+                    _menuSection(context, 'Rider menu', [
+                      _menuTile(
+                        context,
+                        Icons.delivery_dining_outlined,
+                        'My Deliveries',
+                        'View and manage assigned deliveries',
+                        () => _openWorkArea(1),
+                      ),
+                      _menuTile(
+                        context,
+                        Icons.history_rounded,
+                        'Delivery History',
+                        'Review completed and declined deliveries',
+                        () => _openWorkArea(2),
+                      ),
+                      _menuTile(
+                        context,
+                        Icons.bar_chart_rounded,
+                        'Reports',
+                        'See delivery totals and trends',
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const RiderReportsScreen(),
                           ),
                         ),
+                      ),
+                      _menuTile(
+                        context,
+                        Icons.notifications_none_rounded,
+                        'Notifications',
+                        'View rider and order updates',
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationsScreen(),
+                          ),
+                        ),
+                      ),
+                      _menuTile(
+                        context,
+                        Icons.support_agent_rounded,
+                        'Customer Service',
+                        'Contact KJM Coffee Shop support',
+                        () => showCustomerServiceSheet(context),
+                      ),
+                      _menuTile(
+                        context,
+                        Icons.info_outline_rounded,
+                        'About',
+                        'About the KJM rider app',
+                        _openAbout,
+                      ),
+                    ]),
+                    const SizedBox(height: 14),
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(_error!, style: TextStyle(color: scheme.error)),
                     ],
-                  ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      height: 50,
+                      child: OutlinedButton.icon(
+                        onPressed: _logout,
+                        icon: const Icon(Icons.logout_rounded),
+                        label: const Text('Log out'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: scheme.error,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                  ],
                 ),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(_error!, style: TextStyle(color: scheme.error)),
-                ],
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 52,
-                  child: FilledButton.icon(
-                    onPressed: _saving ? null : _save,
-                    icon: const Icon(Icons.save_outlined),
-                    label: _saving
-                        ? SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Theme.of(context).colorScheme.onPrimary,
-                            ),
-                          )
-                        : const Text('Save Changes'),
-                  ),
-                ),
-                const SizedBox(height: 28),
-              ],
-            ),
+        ),
+      ),
     );
   }
 
-  Widget _section(String title, IconData icon, List<Widget> children) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  Widget _profileHero(BuildContext context, String? avatar) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.fromLTRB(18, 10, 18, 8),
+    child: Column(
+      children: [
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: riderGold,
+                shape: BoxShape.circle,
+              ),
+              child: CircleAvatar(
+                radius: 48,
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                backgroundImage: avatar == null || avatar.isEmpty
+                    ? null
+                    : NetworkImage(avatar),
+                child: avatar == null || avatar.isEmpty
+                    ? Icon(
+                        Icons.person_rounded,
+                        size: 48,
+                        color: riderAccent(context),
+                      )
+                    : null,
+              ),
+            ),
+            Positioned(
+              right: -2,
+              bottom: 0,
+              child: IconButton.filled(
+                style: IconButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: _changePhoto,
+                icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                tooltip: 'Change profile photo',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          _name.text.trim().isEmpty ? 'Rider' : _name.text.trim(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: riderPrimaryText(context),
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        Text(
+          'Delivery Rider',
+          style: TextStyle(color: riderSecondaryText(context), fontSize: 14),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: _available
+                ? const Color(0xFF176B2C)
+                : Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: riderAccent(context)),
-              const SizedBox(width: 8),
+              Icon(
+                Icons.circle,
+                size: 8,
+                color: _available ? const Color(0xFF76F08D) : riderMutedBrown,
+              ),
+              const SizedBox(width: 6),
               Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
+                _available ? 'ONLINE' : 'OFFLINE',
+                style: TextStyle(
+                  color: _available ? Colors.white : riderPrimaryText(context),
                   fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                  letterSpacing: .5,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          ...children,
-        ],
+        ),
+      ],
+    ),
+  );
+
+  Widget _profileQuickInfo(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+    child: Column(
+      children: [
+        _quickInfoRow(context, Icons.call_rounded, _phone.text, 'Phone number'),
+        Divider(height: 1, color: Theme.of(context).colorScheme.outlineVariant),
+        _quickInfoRow(
+          context,
+          Icons.email_rounded,
+          _email.text,
+          'Email address',
+        ),
+        Divider(height: 1, color: Theme.of(context).colorScheme.outlineVariant),
+        _quickInfoRow(
+          context,
+          Icons.two_wheeler_rounded,
+          [
+            _vehicle.text.trim(),
+            if (_plate.text.trim().isNotEmpty) 'Plate: ${_plate.text.trim()}',
+          ].where((part) => part.trim().isNotEmpty).join(' · '),
+          'Vehicle used for deliveries',
+        ),
+      ],
+    ),
+  );
+
+  Widget _quickInfoRow(
+    BuildContext context,
+    IconData icon,
+    String value,
+    String fallback,
+  ) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    child: Row(
+      children: [
+        Icon(icon, color: riderAccent(context), size: 21),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            value.trim().isEmpty ? fallback : value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: riderPrimaryText(context),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _menuSection(
+    BuildContext context,
+    String title,
+    List<Widget> children,
+  ) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(4, 0, 4, 7),
+        child: Text(
+          title,
+          style: TextStyle(
+            color: riderSecondaryText(context),
+            fontWeight: FontWeight.w800,
+            letterSpacing: .5,
+          ),
+        ),
+      ),
+      ...children,
+    ],
+  );
+
+  Widget _menuTile(
+    BuildContext context,
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback onTap,
+  ) => ListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+    leading: Icon(icon, color: riderAccent(context)),
+    title: Text(
+      title,
+      style: TextStyle(
+        color: riderPrimaryText(context),
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+    subtitle: Text(
+      subtitle,
+      style: TextStyle(color: riderSecondaryText(context)),
+    ),
+    trailing: Icon(
+      Icons.chevron_right_rounded,
+      color: riderSecondaryText(context),
+    ),
+    onTap: onTap,
+  );
+}
+
+class RiderEditProfileScreen extends StatefulWidget {
+  const RiderEditProfileScreen({
+    super.key,
+    required this.name,
+    required this.email,
+    required this.phone,
+    required this.vehicle,
+    required this.plate,
+    required this.license,
+    required this.getAvatarUrl,
+    required this.onSave,
+    required this.onChangePhoto,
+  });
+
+  final TextEditingController name;
+  final TextEditingController email;
+  final TextEditingController phone;
+  final TextEditingController vehicle;
+  final TextEditingController plate;
+  final TextEditingController license;
+  final String? Function() getAvatarUrl;
+  final Future<String?> Function() onSave;
+  final Future<void> Function() onChangePhoto;
+
+  @override
+  State<RiderEditProfileScreen> createState() => _RiderEditProfileScreenState();
+}
+
+class _RiderEditProfileScreenState extends State<RiderEditProfileScreen> {
+  bool _saving = false;
+  String? _error;
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final error = await widget.onSave();
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      _error = error;
+    });
+    if (error == null) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) => RiderVisualTheme(
+    child: Scaffold(
+      appBar: AppBar(title: const Text('Edit Profile')),
+      body: RiderImageBackground(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Center(
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 48,
+                    backgroundColor: Theme.of(context).colorScheme.surface,
+                    backgroundImage: widget.getAvatarUrl()?.isNotEmpty == true
+                        ? NetworkImage(widget.getAvatarUrl()!)
+                        : null,
+                    child: widget.getAvatarUrl()?.isNotEmpty == true
+                        ? null
+                        : Icon(
+                            Icons.person_rounded,
+                            size: 46,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: () async {
+                      await widget.onChangePhoto();
+                      if (mounted) setState(() {});
+                    },
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    label: const Text('Change Photo'),
+                  ),
+                ],
+              ),
+            ),
+            _profileSection(
+              context,
+              'Personal Information',
+              Icons.person_outline,
+              [
+                _profileInput(
+                  context,
+                  'Name',
+                  widget.name,
+                  Icons.badge_outlined,
+                ),
+                _profileInput(
+                  context,
+                  'Phone',
+                  widget.phone,
+                  Icons.phone_outlined,
+                  keyboard: TextInputType.phone,
+                ),
+                _profileInput(
+                  context,
+                  'Email',
+                  widget.email,
+                  Icons.email_outlined,
+                  readOnly: true,
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _profileSection(
+              context,
+              'Vehicle Information',
+              Icons.two_wheeler_outlined,
+              [
+                _profileInput(
+                  context,
+                  'Vehicle type',
+                  widget.vehicle,
+                  Icons.directions_bike_outlined,
+                ),
+                _profileInput(
+                  context,
+                  'Plate number',
+                  widget.plate,
+                  Icons.pin_outlined,
+                ),
+                _profileInput(
+                  context,
+                  'License number',
+                  widget.license,
+                  Icons.credit_card_outlined,
+                ),
+              ],
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: _saving ? null : _save,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(_saving ? 'Saving…' : 'Save Changes'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class RiderChangePasswordScreen extends StatefulWidget {
+  const RiderChangePasswordScreen({
+    super.key,
+    required this.currentPassword,
+    required this.newPassword,
+    required this.confirmPassword,
+    required this.onSave,
+  });
+
+  final TextEditingController currentPassword;
+  final TextEditingController newPassword;
+  final TextEditingController confirmPassword;
+  final Future<String?> Function() onSave;
+
+  @override
+  State<RiderChangePasswordScreen> createState() =>
+      _RiderChangePasswordScreenState();
+}
+
+class _RiderChangePasswordScreenState extends State<RiderChangePasswordScreen> {
+  bool _saving = false;
+  bool _showCurrent = false;
+  bool _showNew = false;
+  bool _showConfirm = false;
+  String? _error;
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final error = await widget.onSave();
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      _error = error;
+    });
+    if (error == null) Navigator.of(context).pop();
+  }
+
+  Widget _passwordField(
+    String label,
+    TextEditingController controller,
+    bool visible,
+    ValueChanged<bool> onVisibility,
+  ) => TextField(
+    controller: controller,
+    obscureText: !visible,
+    decoration: InputDecoration(
+      labelText: label,
+      prefixIcon: const Icon(Icons.lock_outline_rounded),
+      suffixIcon: IconButton(
+        tooltip: visible ? 'Hide password' : 'Show password',
+        onPressed: () => onVisibility(!visible),
+        icon: Icon(
+          visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+        ),
       ),
     ),
   );
 
-  Widget _field(
-    String label,
-    TextEditingController controller, {
-    IconData? icon,
-    TextInputType? keyboard,
-    bool readOnly = false,
-    bool password = false,
-    String? hint,
-  }) => TextField(
-    controller: controller,
-    readOnly: readOnly,
-    keyboardType: keyboard,
-    obscureText: password,
-    decoration: InputDecoration(
-      labelText: label,
-      hintText: hint,
-      prefixIcon: icon == null ? null : Icon(icon),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-      filled: true,
+  @override
+  Widget build(BuildContext context) => RiderVisualTheme(
+    child: Scaffold(
+      appBar: AppBar(title: const Text('Change Password')),
+      body: RiderImageBackground(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            _passwordField(
+              'Current Password',
+              widget.currentPassword,
+              _showCurrent,
+              (v) => setState(() => _showCurrent = v),
+            ),
+            const SizedBox(height: 14),
+            _passwordField(
+              'New Password',
+              widget.newPassword,
+              _showNew,
+              (v) => setState(() => _showNew = v),
+            ),
+            const SizedBox(height: 14),
+            _passwordField(
+              'Confirm New Password',
+              widget.confirmPassword,
+              _showConfirm,
+              (v) => setState(() => _showConfirm = v),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 18),
+            SizedBox(
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: _saving ? null : _save,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check_rounded),
+                label: Text(_saving ? 'Saving…' : 'Save Password'),
+              ),
+            ),
+          ],
+        ),
+      ),
     ),
   );
 }
+
+Widget _profileSection(
+  BuildContext context,
+  String title,
+  IconData icon,
+  List<Widget> fields,
+) => Padding(
+  padding: const EdgeInsets.symmetric(vertical: 8),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Icon(icon, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+        ],
+      ),
+      const SizedBox(height: 14),
+      ...fields.map(
+        (field) =>
+            Padding(padding: const EdgeInsets.only(bottom: 12), child: field),
+      ),
+    ],
+  ),
+);
+
+Widget _profileInput(
+  BuildContext context,
+  String label,
+  TextEditingController controller,
+  IconData icon, {
+  TextInputType? keyboard,
+  bool readOnly = false,
+}) => TextField(
+  controller: controller,
+  keyboardType: keyboard,
+  readOnly: readOnly,
+  decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
+);

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../core/api.dart';
 import '../core/realtime.dart';
 import '../core/util.dart';
+import '../rider/rider_delivery_screen.dart';
+import 'rider_chat_screen.dart';
 import 'trackorder_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -67,20 +69,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   String _status(Map<String, dynamic> notification) {
     final data = notification['data'];
-    return data is Map ? '${data['status'] ?? ''}' : '';
+    return data is Map ? '${data['event'] ?? data['status'] ?? ''}' : '';
   }
 
   String _title(Map<String, dynamic> notification) {
     final status = _status(notification);
+    final data = notification['data'];
+    final type = '${notification['type'] ?? (data is Map ? data['type'] : '')}';
+    if (type == 'rider_chat') return 'New Message from Your Rider';
+    if (type == 'delivery') {
+      return switch (status) {
+        'assigned' => 'New delivery assignment',
+        'reassigned' => 'Delivery reassigned',
+        'ready_for_pickup' => 'Order ready for pickup',
+        'cancelled' => 'Delivery cancelled',
+        _ => 'Delivery update',
+      };
+    }
     return switch (status) {
+      'payment_confirmed' => 'Payment confirmed',
       'pending' => 'Order received',
-      'confirmed' => 'Order confirmed',
-      'preparing' => 'Preparing your order',
-      'ready' => 'Order ready',
+      'confirmed' => 'Order Confirmed!',
+      'preparing' => 'Preparing Your Order',
+      'ready' => 'Order Ready for Pickup',
       'rider_assigned' => 'Rider assigned',
-      'picked_up' => 'Order picked up',
-      'on_the_way' => 'Order on the way',
-      'delivered' => 'Order delivered',
+      'picked_up' => 'Order Picked Up',
+      'on_the_way' => 'Your Order Is On the Way!',
+      'delivered' => 'Order Delivered!',
       'completed' => 'Order completed',
       'cancelled' => 'Order cancelled',
       'rejected' => 'Order declined',
@@ -94,6 +109,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   String _statusLabel(String status) => switch (status) {
+    'payment_confirmed' => 'Paid',
+    'assigned' || 'reassigned' => 'Assigned',
+    'ready_for_pickup' => 'Pickup ready',
     'pending' => 'Received',
     'confirmed' => 'Confirmed',
     'preparing' => 'Preparing',
@@ -111,6 +129,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   String _message(Map<String, dynamic> notification) {
     final data = notification['data'];
     final status = _status(notification);
+    final type = '${notification['type'] ?? (data is Map ? data['type'] : '')}';
+    if (type == 'rider_chat') {
+      return 'A new message is waiting in your order chat.';
+    }
+    if (type == 'delivery') {
+      final message = '${notification['message'] ?? ''}'.trim();
+      return message.isEmpty
+          ? 'Open the delivery to view its latest details.'
+          : message;
+    }
     if (data is! Map || status.isEmpty) {
       return switch ('${notification['type'] ?? ''}') {
         'refund' => 'There is an update about your refund.',
@@ -128,6 +156,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ? (orderId == null ? 'your order' : 'order #$orderId')
         : 'order $orderNumber';
     final phrase = switch (status) {
+      'payment_confirmed' => 'has a confirmed payment',
       'pending' => 'has been received by the shop',
       'confirmed' => 'has been confirmed by the shop',
       'preparing' => 'is being prepared',
@@ -146,6 +175,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Color _statusColor(String status, BuildContext context) => switch (status) {
+    'payment_confirmed' ||
+    'assigned' ||
+    'reassigned' => const Color(0xFF39845A),
     'pending' || 'confirmed' => const Color(0xFF39845A),
     'completed' || 'ready' => const Color(0xFFD98A18),
     'delivered' ||
@@ -153,27 +185,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     'rejected' ||
     'expired' => const Color(0xFFD83B4B),
     'picked_up' || 'on_the_way' => const Color(0xFF287CC1),
-    'preparing' => const Color(0xFF119A94),
+    'preparing' || 'ready_for_pickup' => const Color(0xFF119A94),
     'rider_assigned' => const Color(0xFF6A49A4),
     _ => Theme.of(context).colorScheme.primary,
   };
 
   IconData _icon(String status, Map<String, dynamic> notification) =>
-      switch (status) {
-        'pending' || 'confirmed' => Icons.shopping_cart_outlined,
-        'preparing' => Icons.soup_kitchen_outlined,
-        'ready' => Icons.inventory_2_outlined,
-        'rider_assigned' ||
-        'picked_up' ||
-        'on_the_way' ||
-        'delivered' => Icons.delivery_dining_rounded,
-        'completed' => Icons.check_circle_outline_rounded,
-        'cancelled' || 'rejected' || 'expired' => Icons.info_outline_rounded,
-        _ =>
-          notification['type'] == 'refund'
-              ? Icons.payments_outlined
-              : Icons.notifications_none_rounded,
-      };
+      notification['type'] == 'rider_chat'
+      ? Icons.chat_bubble_outline_rounded
+      : switch (status) {
+          'pending' || 'confirmed' => Icons.shopping_cart_outlined,
+          'preparing' => Icons.soup_kitchen_outlined,
+          'ready' => Icons.inventory_2_outlined,
+          'rider_assigned' ||
+          'picked_up' ||
+          'on_the_way' ||
+          'delivered' => Icons.delivery_dining_rounded,
+          'completed' => Icons.check_circle_outline_rounded,
+          'cancelled' || 'rejected' || 'expired' => Icons.info_outline_rounded,
+          _ =>
+            notification['type'] == 'refund'
+                ? Icons.payments_outlined
+                : Icons.notifications_none_rounded,
+        };
 
   @override
   Widget build(BuildContext context) {
@@ -286,13 +320,31 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final status = _status(notification);
     final color = _statusColor(status, context);
     final data = notification['data'];
+    final deliveryId = data is Map ? _intValue(data['delivery_id']) : null;
     final orderId = data is Map ? _intValue(data['order_id']) : null;
+    final isRider = Api.I.role == 'rider';
+    final isRiderChat = notification['type'] == 'rider_chat';
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(19),
       child: InkWell(
         borderRadius: BorderRadius.circular(19),
-        onTap: orderId == null
+        onTap: isRiderChat && !isRider && orderId != null
+            ? () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      RiderChatScreen(targetId: orderId, isRider: false),
+                ),
+              )
+            : isRider
+            ? deliveryId == null
+                  ? null
+                  : () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => RiderDeliveryScreen(id: deliveryId),
+                      ),
+                    )
+            : orderId == null
             ? null
             : () => Navigator.of(context).push(
                 MaterialPageRoute<void>(

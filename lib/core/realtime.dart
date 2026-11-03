@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:pusher_reverb_flutter/pusher_reverb_flutter.dart';
 
@@ -13,6 +13,7 @@ class Realtime {
   bool _connecting = false;
   bool _connected = false;
   String? _channelName;
+  int? activeCustomerRiderChatOrderId;
 
   Future<void> connect() async {
     final token = Api.I.accessToken;
@@ -36,9 +37,12 @@ class Realtime {
       await client.connect();
       final channel = client.subscribeToPrivateChannel('private-users.$userId');
       void forward(dynamic event, dynamic data) {
-        final payload = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+        final payload = data is Map
+            ? Map<String, dynamic>.from(data)
+            : <String, dynamic>{};
         if (!_updates.isClosed) _updates.add(payload);
       }
+
       channel.bind('live.updated', forward);
       final menu = client.subscribeToChannel('menu.updates');
       menu.bind('live.updated', forward);
@@ -53,6 +57,7 @@ class Realtime {
   }
 
   Future<void> disconnect() async {
+    activeCustomerRiderChatOrderId = null;
     if (!_connected || _channelName == null) return;
     try {
       final client = ReverbClient.instance();
@@ -63,4 +68,3 @@ class Realtime {
     _channelName = null;
   }
 }
-

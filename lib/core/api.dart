@@ -666,6 +666,10 @@ class Api {
   Future<Map<String, dynamic>> appConfig() async =>
       Map<String, dynamic>.from(_d(await _call('GET', '/app-config')) as Map);
 
+  Future<Map<String, dynamic>> shopHours() async => Map<String, dynamic>.from(
+    _d(await _call('GET', '/shop-hours', auth: false)) as Map,
+  );
+
   Future<List<Map<String, dynamic>>> homeBanners() async =>
       mapList(_d(await _call('GET', '/home-banners', auth: false)));
 
