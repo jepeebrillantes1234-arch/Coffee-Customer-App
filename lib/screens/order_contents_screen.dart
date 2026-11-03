@@ -179,12 +179,7 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
                         bold: true,
                       ),
                       const SizedBox(height: 8),
-                      _summaryRow(
-                        'Payment',
-                        '${order['payment_method'] ?? '—'}'
-                            .toString()
-                            .toUpperCase(),
-                      ),
+                      _summaryRow('Payment', payLabel(order['payment_method'])),
                       if ((order['delivery_address'] ?? '')
                           .toString()
                           .isNotEmpty) ...[

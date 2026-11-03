@@ -690,6 +690,28 @@ class Api {
         _d(await _call('POST', '/membership/payment/verify')) as Map,
       );
 
+  Future<Map<String, dynamic>> membershipCardDeliveries() async =>
+      Map<String, dynamic>.from(
+        _d(await _call('GET', '/membership/card-deliveries')) as Map,
+      );
+
+  Future<Map<String, dynamic>> requestMembershipCardDelivery({
+    required int addressId,
+    String? deliveryNotes,
+  }) async => Map<String, dynamic>.from(
+    _d(
+      await _call(
+        'POST',
+        '/membership/card-deliveries',
+        body: {
+          'address_id': addressId,
+          if (deliveryNotes != null && deliveryNotes.trim().isNotEmpty)
+            'delivery_notes': deliveryNotes.trim(),
+        },
+      ),
+    ) as Map,
+  );
+
   Future<List<Map<String, dynamic>>> rewards() async =>
       mapList(_d(await _call('GET', '/rewards')));
 
@@ -738,6 +760,42 @@ class Api {
   Future<Map<String, dynamic>> deliveries() async => Map<String, dynamic>.from(
     _d(await _call('GET', '/rider/deliveries')) as Map,
   );
+
+  Future<Map<String, dynamic>> riderMembershipCardDeliveries() async =>
+      Map<String, dynamic>.from(
+        _d(await _call('GET', '/rider/membership-card-deliveries')) as Map,
+      );
+
+  Future<Map<String, dynamic>> riderMembershipCardDelivery(int id) async =>
+      Map<String, dynamic>.from(
+        _d(await _call('GET', '/rider/membership-card-deliveries/$id')) as Map,
+      );
+
+  Future<Map<String, dynamic>> riderMembershipCardDeliveryAction(
+    int id,
+    String action,
+  ) async => Map<String, dynamic>.from(
+    _d(await _call('POST', '/rider/membership-card-deliveries/$id/$action'))
+        as Map,
+  );
+
+  Future<void> sendMembershipCardDeliveryLocation(
+    int deliveryId,
+    double latitude,
+    double longitude,
+    double accuracy,
+  ) async {
+    await _call(
+      'POST',
+      '/rider/membership-card-delivery-location',
+      body: {
+        'delivery_id': deliveryId,
+        'latitude': latitude,
+        'longitude': longitude,
+        'accuracy': accuracy,
+      },
+    );
+  }
 
   Future<Map<String, dynamic>> history() async => Map<String, dynamic>.from(
     _d(await _call('GET', '/rider/history')) as Map,

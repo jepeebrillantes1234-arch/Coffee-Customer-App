@@ -115,7 +115,8 @@ class _QrphPaymentScreenState extends State<QrphPaymentScreen>
         data['payment_expires_at'] ??
         (data['payment'] is Map ? data['payment']['qr_expires_at'] : null);
     _expiresAt = DateTime.tryParse('$expires')?.toLocal();
-    final rawPhase = '${data['status'] ?? ''}'.toLowerCase();
+    final rawPhase = '${data['payment_attempt_status'] ?? data['status'] ?? ''}'
+        .toLowerCase();
     final providerPhase = '${data['provider_status'] ?? ''}'.toLowerCase();
     if (rawPhase == 'failed' ||
         rawPhase == 'cancelled' ||
@@ -424,6 +425,20 @@ class _QrphPaymentScreenState extends State<QrphPaymentScreen>
             ),
           ),
           const SizedBox(height: 18),
+          Center(
+            child: Image.asset(
+              'assets/images/qrph.png',
+              width: 58,
+              height: 36,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => Icon(
+                Icons.qr_code_2_rounded,
+                size: 32,
+                color: colors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(
             'Pay with QRPh',
             textAlign: TextAlign.center,

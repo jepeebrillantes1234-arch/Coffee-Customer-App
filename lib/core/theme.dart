@@ -197,7 +197,7 @@ class AppThemeController extends ChangeNotifier {
 String statusLabel(String s, [String type = 'delivery']) {
   switch (s) {
     case 'awaiting_payment':
-      return 'Awaiting payment';
+      return 'Waiting for Payment';
     case 'pending':
       return 'Awaiting confirmation';
     case 'confirmed':

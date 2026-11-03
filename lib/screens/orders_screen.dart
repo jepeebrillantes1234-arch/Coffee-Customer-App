@@ -8,6 +8,7 @@ import '../core/theme.dart';
 import '../core/util.dart';
 import '../core/widgets.dart';
 import 'order_contents_screen.dart';
+import 'payment_screen.dart';
 import 'trackorder_screen.dart';
 import 'root_screen.dart';
 
@@ -24,6 +25,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   String? _error;
   StreamSubscription<Map<String, dynamic>>? _liveSubscription;
   String _filter = 'All';
+  int? _payingOrderId;
 
   static const _filters = ['All', 'Completed', 'Cancelled', 'Pending'];
   @override
@@ -168,6 +170,41 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ),
     );
     _load(silent: true);
+  }
+
+  Future<void> _payOrder(Map<String, dynamic> order) async {
+    final id = order['id'] as int;
+    if (_payingOrderId != null) return;
+    setState(() => _payingOrderId = id);
+    try {
+      final fresh = await Api.I.payOrder(id);
+      if (!mounted) return;
+      if (fresh['payment_status'] == 'paid') {
+        await _load(silent: true);
+        return;
+      }
+      if (fresh['status'] != 'awaiting_payment') {
+        await _load(silent: true);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This order is no longer awaiting payment.'),
+          ),
+        );
+        return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => PaymentScreen(order: fresh)),
+      );
+      await _load(silent: true);
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _payingOrderId = null);
+    }
   }
 
   @override
@@ -500,6 +537,38 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
+                    if ('${order['payment_method'] ?? ''}'.toLowerCase() ==
+                        'qrph') ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Image.asset(
+                            'assets/images/qrph.png',
+                            width: 28,
+                            height: 18,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) => Icon(
+                              Icons.qr_code_2_rounded,
+                              size: 16,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              _orderPaymentLabel(order),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: _orderPaymentColor(order),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -562,6 +631,31 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       ),
                     ),
                   ),
+                  if (order['can_pay'] == true)
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        minimumSize: const Size(0, 28),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: _payingOrderId == null
+                          ? () => _payOrder(order)
+                          : null,
+                      icon: _payingOrderId == order['id']
+                          ? const SizedBox.square(
+                              dimension: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.qr_code_2_rounded, size: 14),
+                      label: const Text(
+                        'Pay Now',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
                   TextButton.icon(
                     style: TextButton.styleFrom(
                       foregroundColor: Theme.of(context).colorScheme.error,
@@ -603,4 +697,25 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   String _englishStatus(String status, String type) =>
       statusLabel(status, type);
+
+  String _orderPaymentLabel(Map<String, dynamic> order) {
+    final status = '${order['payment_status'] ?? ''}'.toLowerCase();
+    final attempt = '${order['payment_attempt_status'] ?? ''}'.toLowerCase();
+    if (status == 'paid' || attempt == 'paid') return 'Paid via QRPh';
+    if (attempt == 'failed') return 'Payment Failed';
+    if (attempt == 'expired') return 'Payment Expired';
+    if (status == 'cancelled' || attempt == 'cancelled') return 'Cancelled';
+    return 'QRPh Payment Pending';
+  }
+
+  Color _orderPaymentColor(Map<String, dynamic> order) {
+    final label = _orderPaymentLabel(order);
+    if (label == 'Paid via QRPh') return Colors.green.shade700;
+    if (label == 'Payment Failed' ||
+        label == 'Payment Expired' ||
+        label == 'Cancelled') {
+      return Theme.of(context).colorScheme.error;
+    }
+    return Theme.of(context).colorScheme.onSurfaceVariant;
+  }
 }

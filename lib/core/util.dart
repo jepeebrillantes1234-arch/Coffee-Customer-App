@@ -27,7 +27,7 @@ String payLabel(dynamic method) {
     case 'cash':
       return 'Cash sa shop';
     case 'gcash':
-      return 'GCash';
+      return 'QRPh';
     default:
       return '$method'.toUpperCase();
   }

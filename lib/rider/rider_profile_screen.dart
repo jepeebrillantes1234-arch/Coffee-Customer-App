@@ -8,6 +8,7 @@ import '../screens/customer_service_sheet.dart';
 import '../screens/notifications_screen.dart';
 import 'rider_home_screen.dart';
 import 'rider_location_service.dart';
+import 'rider_membership_card_deliveries_screen.dart';
 import 'rider_reports_screen.dart';
 import 'rider_theme.dart';
 
@@ -374,6 +375,18 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                     ]),
                     const SizedBox(height: 14),
                     _menuSection(context, 'Rider menu', [
+                      _menuTile(
+                        context,
+                        Icons.credit_card_outlined,
+                        'Membership Card Deliveries',
+                        'View assigned physical card deliveries',
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const RiderMembershipCardDeliveriesScreen(),
+                          ),
+                        ),
+                      ),
                       _menuTile(
                         context,
                         Icons.delivery_dining_outlined,

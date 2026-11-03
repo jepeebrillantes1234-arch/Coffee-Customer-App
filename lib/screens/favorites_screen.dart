@@ -27,7 +27,11 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         leading: IconButton(
           tooltip: 'Back',
           onPressed: () => Navigator.of(context).maybePop(),
-          icon: Icon(Icons.arrow_back_rounded, color: Theme.of(context).colorScheme.primary, size: 28),
+          icon: Icon(
+            Icons.arrow_back_rounded,
+            color: Theme.of(context).colorScheme.primary,
+            size: 28,
+          ),
         ),
         titleSpacing: 0,
         title: Row(
@@ -49,7 +53,10 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                   ),
                   Text(
                     'Your cravings, saved',
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
@@ -61,6 +68,34 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         listenable: Favorites.I,
         builder: (_, _) {
           final items = Favorites.I.items;
+          if (Favorites.I.isLoading && items.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (Favorites.I.lastError != null && items.isEmpty) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      Favorites.I.lastError!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: Favorites.I.load,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Try again'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
           if (items.isEmpty) {
             return const Center(
               child: Text(

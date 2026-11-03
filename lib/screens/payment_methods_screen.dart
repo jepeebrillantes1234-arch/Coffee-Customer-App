@@ -93,8 +93,24 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   ][month - 1];
 
   String _status(Map<String, dynamic> order) {
-    final status = order['payment_status']?.toString().trim();
+    final method = '${order['payment_method'] ?? ''}'.toLowerCase();
+    final status = (method == 'qrph' && order['payment_attempt_status'] != null
+            ? order['payment_attempt_status']
+            : order['payment_status'])
+        ?.toString()
+        .trim()
+        .toLowerCase();
     if (status == null || status.isEmpty) return 'Status unavailable';
+    if (method == 'qrph') {
+      return switch (status) {
+        'unpaid' || 'pending' => 'Waiting for Payment',
+        'paid' => 'Paid via QRPh',
+        'failed' => 'Payment Failed',
+        'expired' => 'Payment Expired',
+        'cancelled' => 'Cancelled',
+        _ => 'Payment ${status.replaceAll('_', ' ')}',
+      };
+    }
     return status.replaceAll('_', ' ').split(' ').map((word) {
       if (word.isEmpty) return word;
       return '${word[0].toUpperCase()}${word.substring(1)}';
@@ -104,9 +120,13 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   Color _statusColor(BuildContext context, String status) {
     final colors = Theme.of(context).colorScheme;
     return switch (status.toLowerCase()) {
-      'paid' => Colors.green.shade700,
+      'paid' || 'paid via qrph' => Colors.green.shade700,
       'refunded' => colors.primary,
-      'failed' || 'expired' || 'cancelled' => colors.error,
+      'failed' ||
+      'expired' ||
+      'cancelled' ||
+      'payment failed' ||
+      'payment expired' => colors.error,
       _ => colors.onSurfaceVariant,
     };
   }
@@ -114,6 +134,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   Widget _methodCard({
     required BuildContext context,
     required IconData icon,
+    String? asset,
     required String title,
     required String label,
     required String description,
@@ -133,7 +154,14 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 color: colors.primaryContainer,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: colors.onPrimaryContainer),
+              child: asset == null
+                  ? Icon(icon, color: colors.onPrimaryContainer)
+                  : Image.asset(
+                      asset,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) =>
+                          Icon(icon, color: colors.onPrimaryContainer),
+                    ),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -238,6 +266,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                         _methodCard(
                           context: context,
                           icon: Icons.qr_code_2_rounded,
+                          asset: 'assets/images/qrph.png',
                           title: 'QRPh',
                           label: 'PAYMONGO',
                           description: 'Pay online through PayMongo’s secure QRPh checkout. Scan with a QRPh-enabled wallet or banking app. Your order is confirmed only after the server verifies payment.',

@@ -135,7 +135,7 @@ class _MenuScreenState extends State<MenuScreen> {
                       showCheckmark: false,
                       labelStyle: TextStyle(
                         color: _cat == category['id']
-                            ? Colors.white
+                            ? Theme.of(context).colorScheme.onPrimary
                             : Theme.of(context).colorScheme.onSurface,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -249,7 +249,44 @@ class _MenuScreenState extends State<MenuScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
+            ListenableBuilder(
+              listenable: Favorites.I,
+              builder: (_, _) {
+                final id = (product['id'] as num).toInt();
+                final isFavorite = Favorites.I.has(id);
+                return IconButton(
+                  tooltip: isFavorite
+                      ? 'Remove from favorites'
+                      : 'Add to favorites',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: Favorites.I.isPending(id)
+                      ? null
+                      : () async {
+                          final saved = await Favorites.I.toggle(product);
+                          if (!mounted) return;
+                          if (!saved) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  Favorites.I.lastError ??
+                                      'Could not update favorites.',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                  icon: Icon(
+                    isFavorite
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    color: isFavorite
+                        ? const Color(0xFFE76565)
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                );
+              },
+            ),
             AnimatedAddButton(
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(
@@ -301,14 +338,29 @@ Widget productCard(BuildContext context, Map<String, dynamic> p) {
                   child: ListenableBuilder(
                     listenable: Favorites.I,
                     builder: (_, _) {
-                      final fav = Favorites.I.has(p['id'] as int);
+                      final id = (p['id'] as num).toInt();
+                      final fav = Favorites.I.has(id);
                       return Material(
                         color: Theme.of(context).colorScheme.surface
                             .withValues(alpha: 0.94),
                         shape: const CircleBorder(),
                         child: InkWell(
                           customBorder: const CircleBorder(),
-                          onTap: () => Favorites.I.toggle(p),
+                          onTap: Favorites.I.isPending(id)
+                              ? null
+                              : () async {
+                                  final saved = await Favorites.I.toggle(p);
+                                  if (!saved && context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          Favorites.I.lastError ??
+                                              'Could not update favorites.',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                },
                           child: SizedBox(
                             width: 42,
                             height: 42,

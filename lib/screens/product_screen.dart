@@ -5,6 +5,7 @@ import '../core/theme.dart';
 import '../core/util.dart';
 import '../core/widgets.dart';
 import '../state/cart.dart';
+import '../state/favorites.dart';
 import '../state/promo_state.dart';
 
 class ProductScreen extends StatefulWidget {
@@ -32,6 +33,7 @@ class _ProductScreenState extends State<ProductScreen> {
   void initState() {
     super.initState();
     _load();
+    Favorites.I.load();
   }
 
   @override
@@ -197,8 +199,45 @@ class _ProductScreenState extends State<ProductScreen> {
             fontWeight: FontWeight.w700,
           ),
         ),
-        actions: const [
-          Padding(
+        actions: [
+          if (p != null)
+            ListenableBuilder(
+              listenable: Favorites.I,
+              builder: (buttonContext, _) {
+                final id = (p['id'] as num).toInt();
+                final isFavorite = Favorites.I.has(id);
+                return IconButton(
+                  tooltip: isFavorite
+                      ? 'Remove from favorites'
+                      : 'Add to favorites',
+                  onPressed: Favorites.I.isPending(id)
+                      ? null
+                      : () async {
+                          final saved = await Favorites.I.toggle(p);
+                          if (!buttonContext.mounted) return;
+                          if (!saved) {
+                            ScaffoldMessenger.of(buttonContext).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  Favorites.I.lastError ??
+                                      'Could not update favorites.',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                  icon: Icon(
+                    isFavorite
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    color: isFavorite
+                        ? const Color(0xFFE76565)
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                );
+              },
+            ),
+          const Padding(
             padding: EdgeInsets.only(right: 16),
             child: Icon(Icons.coffee_outlined, color: caramel, size: 30),
           ),

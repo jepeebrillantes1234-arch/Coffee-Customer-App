@@ -1,6 +1,6 @@
-import 'dart:math';
-
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../core/api.dart';
@@ -21,6 +21,8 @@ class _MembershipScreenState extends State<MembershipScreen>
   List<Map<String, dynamic>> _transactions = [];
   List<Map<String, dynamic>> _rewards = [];
   List<Map<String, dynamic>> _redemptions = [];
+  List<Map<String, dynamic>> _savedAddresses = [];
+  Map<String, dynamic>? _cardDelivery;
   int _monthlyPointsValue = 0;
   double _membershipPrice = 100;
   double _memberDiscountPercent = 10;
@@ -94,6 +96,22 @@ class _MembershipScreenState extends State<MembershipScreen>
         _redemptions = values[2] as List<Map<String, dynamic>>;
         _loading = false;
       });
+      try {
+        final deliveryData = await Future.wait([
+          Api.I.addresses(),
+          Api.I.membershipCardDeliveries(),
+        ]);
+        if (!mounted) return;
+        final items = (deliveryData[1] as Map<String, dynamic>)['items'];
+        setState(() {
+          _savedAddresses = deliveryData[0] as List<Map<String, dynamic>>;
+          _cardDelivery = items is List && items.whereType<Map>().isNotEmpty
+              ? Map<String, dynamic>.from(items.whereType<Map>().first)
+              : null;
+        });
+      } catch (_) {
+        // Membership details remain available if address loading is offline.
+      }
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -261,6 +279,8 @@ class _MembershipScreenState extends State<MembershipScreen>
                       ),
                     ),
                   _membershipCard(colors),
+                  const SizedBox(height: 14),
+                  _cardDeliverySection(colors),
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -334,6 +354,264 @@ class _MembershipScreenState extends State<MembershipScreen>
             )
           : null,
     );
+  }
+
+  Widget _cardDeliverySection(ColorScheme colors) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.local_shipping_outlined, color: colors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Physical Membership Card',
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_cardDelivery != null) ...[
+            Text(
+              'Delivery status: ${_statusLabel(_cardDelivery!['status'])}',
+              style: Theme.of(context).textTheme.bodyLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            if (_cardDelivery!['address'] is Map)
+              Text(
+                '${(_cardDelivery!['address'] as Map)['full_address'] ?? ''}',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+          ] else ...[
+            Text(
+              'Request delivery of your paid membership card to a saved address.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: !_active || _busy || _savedAddresses.isEmpty
+                    ? null
+                    : _requestCardDelivery,
+                icon: const Icon(Icons.location_on_outlined),
+                label: Text(
+                  _savedAddresses.isEmpty
+                      ? 'Add a saved address first'
+                      : 'Request Card Delivery',
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+
+  String _statusLabel(dynamic value) {
+    switch (value?.toString()) {
+      case 'pending':
+        return 'Pending';
+      case 'preparing_card':
+        return 'Preparing Card';
+      case 'ready_for_delivery':
+        return 'Ready for Delivery';
+      case 'out_for_delivery':
+        return 'Out for Delivery';
+      case 'delivered':
+        return 'Delivered';
+      default:
+        return 'Pending';
+    }
+  }
+
+  Future<void> _requestCardDelivery() async {
+    final notes = TextEditingController();
+    Map<String, dynamic>? selected = _savedAddresses.firstWhere(
+      (address) => address['is_default'] == true,
+      orElse: () => _savedAddresses.first,
+    );
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final lat = double.tryParse('${selected?['latitude'] ?? ''}');
+          final lng = double.tryParse('${selected?['longitude'] ?? ''}');
+          final pin = lat != null && lng != null ? LatLng(lat, lng) : null;
+          final colors = Theme.of(context).colorScheme;
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                0,
+                16,
+                16 + MediaQuery.viewInsetsOf(context).bottom,
+              ),
+              child: SizedBox(
+                height: MediaQuery.sizeOf(context).height * .78,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Review Delivery Address',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<Map<String, dynamic>>(
+                      initialValue: selected,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Saved address',
+                      ),
+                      items: _savedAddresses.map((address) {
+                        final label = address['label']?.toString() ?? 'Address';
+                        final full =
+                            address['formatted_address'] ??
+                            address['full_address'] ??
+                            '';
+                        return DropdownMenuItem(
+                          value: address,
+                          child: Text(
+                            '$label · $full',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (address) =>
+                          setSheetState(() => selected = address),
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: pin == null
+                          ? Center(
+                              child: Text(
+                                'This saved address has no map coordinates.',
+                                style: TextStyle(
+                                  color: colors.onSurfaceVariant,
+                                ),
+                              ),
+                            )
+                          : ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: FlutterMap(
+                                options: MapOptions(
+                                  initialCenter: pin,
+                                  initialZoom: 16,
+                                ),
+                                children: [
+                                  TileLayer(
+                                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                    userAgentPackageName:
+                                        'com.kjmcoffeebrew.app',
+                                  ),
+                                  MarkerLayer(
+                                    markers: [
+                                      Marker(
+                                        point: pin,
+                                        width: 48,
+                                        height: 48,
+                                        child: Icon(
+                                          Icons.location_pin,
+                                          color: colors.error,
+                                          size: 44,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${selected?['formatted_address'] ?? selected?['full_address'] ?? ''}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    if (selected?['barangay'] != null ||
+                        selected?['city'] != null)
+                      Text(
+                        [
+                              selected?['barangay'],
+                              selected?['city'],
+                              selected?['province'],
+                            ]
+                            .where(
+                              (part) =>
+                                  part != null && '$part'.trim().isNotEmpty,
+                            )
+                            .join(', '),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    if (pin != null)
+                      Text(
+                        'Map pin: ${pin.latitude.toStringAsFixed(6)}, ${pin.longitude.toStringAsFixed(6)}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    TextField(
+                      controller: notes,
+                      decoration: const InputDecoration(
+                        labelText: 'Delivery notes or landmark (optional)',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(sheetContext),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: selected == null
+                                ? null
+                                : () => Navigator.pop(sheetContext, {
+                                    'address': selected,
+                                    'notes': notes.text.trim(),
+                                  }),
+                            child: const Text('Submit Request'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    final address = result?['address'];
+    if (address is! Map) {
+      notes.dispose();
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final response = await Api.I.requestMembershipCardDelivery(
+        addressId: (address['id'] as num).toInt(),
+        deliveryNotes: result?['notes']?.toString(),
+      );
+      if (!mounted) return;
+      setState(() => _cardDelivery = response);
+      _message('Membership card delivery request submitted.');
+    } on ApiException catch (error) {
+      _message(error.message);
+    } finally {
+      notes.dispose();
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Widget _membershipCard(ColorScheme colors) {

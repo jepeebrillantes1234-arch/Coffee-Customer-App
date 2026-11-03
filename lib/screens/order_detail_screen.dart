@@ -640,6 +640,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     ),
                   ],
                 ),
+                if ('${o['payment_method'] ?? ''}'.toLowerCase() == 'qrph') ...[
+                  const SizedBox(height: 10),
+                  _qrphPaymentStatus(o),
+                ],
                 const SizedBox(height: 14),
                 if (isDelivery && !isTerminal)
                   Card(
@@ -800,7 +804,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    status == 'cancelled'
+                                    status == 'awaiting_payment'
+                                        ? 'Waiting for Payment'
+                                        : status == 'cancelled'
                                         ? 'Your order has been cancelled'
                                         : status == 'rejected'
                                         ? 'Your order was rejected'
@@ -956,9 +962,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ),
                 const SizedBox(height: 12),
                 if (o['can_pay'] == true)
-                  FilledButton(
+                  FilledButton.icon(
                     onPressed: _busy ? null : _pay,
-                    child: Text('Pay via GCash  |  ${peso(dbl(o['total']))}'),
+                    icon: const Icon(Icons.qr_code_2_rounded),
+                    label: Text('Pay with QRPh  |  ${peso(dbl(o['total']))}'),
                   ),
                 if (status == 'pending' && o['can_cancel'] == true)
                   OutlinedButton.icon(
@@ -1186,6 +1193,70 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       default:
         return status;
     }
+  }
+
+  Widget _qrphPaymentStatus(Map<String, dynamic> order) {
+    final colors = Theme.of(context).colorScheme;
+    final paymentStatus = '${order['payment_status'] ?? ''}'.toLowerCase();
+    final attemptStatus = '${order['payment_attempt_status'] ?? ''}'
+        .toLowerCase();
+    final expiredAt = DateTime.tryParse(
+      '${order['payment_expires_at'] ?? order['qr_expires_at'] ?? ''}',
+    )?.toLocal();
+    final isPaid = paymentStatus == 'paid' || attemptStatus == 'paid';
+    final isFailed = attemptStatus == 'failed';
+    final isExpired =
+        attemptStatus == 'expired' ||
+        (attemptStatus.isEmpty &&
+            expiredAt != null &&
+            expiredAt.isBefore(DateTime.now()) &&
+            !isPaid);
+    final label = isPaid
+        ? 'Paid via QRPh'
+        : isFailed
+        ? 'Payment Failed'
+        : isExpired
+        ? 'Payment Expired'
+        : paymentStatus == 'cancelled' || attemptStatus == 'cancelled'
+        ? 'Cancelled'
+        : 'QRPh Payment Pending';
+    final color = isPaid
+        ? Colors.green.shade700
+        : isFailed || isExpired || label == 'Cancelled'
+        ? colors.error
+        : colors.onSurfaceVariant;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Image.asset(
+            'assets/images/qrph.png',
+            width: 40,
+            height: 26,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) =>
+                Icon(Icons.qr_code_2_rounded, color: colors.primary),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Payment',
+              style: TextStyle(color: colors.onSurfaceVariant),
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(color: color, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _trackingStep(
