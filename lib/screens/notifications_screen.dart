@@ -6,11 +6,14 @@ import '../core/api.dart';
 import '../core/realtime.dart';
 import '../core/util.dart';
 import '../rider/rider_delivery_screen.dart';
+import '../rider/rider_theme.dart';
 import 'rider_chat_screen.dart';
 import 'trackorder_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key});
+  const NotificationsScreen({super.key, this.riderStyle = false});
+
+  final bool riderStyle;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -211,68 +214,80 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final page = Theme.of(context).scaffoldBackgroundColor;
-    return Scaffold(
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final page = widget.riderStyle
+        ? dark
+              ? const Color(0xFF1C1713)
+              : riderCream
+        : Theme.of(context).scaffoldBackgroundColor;
+    final primary = widget.riderStyle
+        ? riderAccent(context)
+        : Theme.of(context).colorScheme.primary;
+    final secondary = widget.riderStyle
+        ? riderSecondaryText(context)
+        : Theme.of(context).colorScheme.onSurfaceVariant;
+    final notificationAction = Padding(
+      padding: const EdgeInsets.only(right: 18),
+      child: _hadUnread
+          ? Badge(
+              smallSize: 10,
+              backgroundColor: const Color(0xFFE24C54),
+              child: Icon(
+                Icons.notifications_none_rounded,
+                color: widget.riderStyle ? riderCream : primary,
+                size: 27,
+              ),
+            )
+          : Icon(
+              Icons.notifications_none_rounded,
+              color: widget.riderStyle ? riderCream : primary,
+              size: 27,
+            ),
+    );
+    final screen = Scaffold(
       backgroundColor: page,
-      appBar: AppBar(
-        backgroundColor: page,
-        leading: IconButton(
-          tooltip: 'Back',
-          onPressed: () => Navigator.of(context).maybePop(),
-          icon: Icon(
-            Icons.arrow_back_rounded,
-            color: Theme.of(context).colorScheme.primary,
-            size: 28,
-          ),
-        ),
-        titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Notifications',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface,
-                fontWeight: FontWeight.w800,
-                fontSize: 22,
+      appBar: widget.riderStyle
+          ? RiderAppBar(title: 'Notifications', actions: [notificationAction])
+          : AppBar(
+              backgroundColor: page,
+              leading: IconButton(
+                tooltip: 'Back',
+                onPressed: () => Navigator.of(context).maybePop(),
+                icon: Icon(
+                  Icons.arrow_back_rounded,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 28,
+                ),
               ),
-            ),
-            Text(
-              'Stay updated with your orders and activities',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 18),
-            child: _hadUnread
-                ? Badge(
-                    smallSize: 10,
-                    backgroundColor: const Color(0xFFE24C54),
-                    child: Icon(
-                      Icons.notifications_none_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 27,
+              titleSpacing: 0,
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Notifications',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 22,
                     ),
-                  )
-                : Icon(
-                    Icons.notifications_none_rounded,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 27,
                   ),
-          ),
-        ],
-      ),
+                  Text(
+                    'Stay updated with your orders and activities',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [notificationAction],
+            ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              color: Theme.of(context).colorScheme.primary,
+              color: primary,
               onRefresh: _load,
               child: _items.isEmpty
                   ? ListView(
@@ -284,18 +299,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               Icon(
                                 Icons.notifications_none_rounded,
                                 size: 48,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
+                                color: secondary,
                               ),
                               const SizedBox(height: 12),
                               Text(
                                 _error ?? 'No notifications yet.',
-                                style: TextStyle(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
+                                style: TextStyle(color: secondary),
                               ),
                             ],
                           ),
@@ -311,6 +320,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ),
             ),
     );
+    return widget.riderStyle ? RiderVisualTheme(child: screen) : screen;
   }
 
   Widget _notificationCard(

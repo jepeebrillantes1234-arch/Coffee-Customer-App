@@ -309,10 +309,8 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
     final scheme = Theme.of(context).colorScheme;
     return RiderVisualTheme(
       child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: riderDeepCoffee,
-          foregroundColor: Colors.white,
-          title: const Text('Rider Profile'),
+        appBar: RiderAppBar(
+          title: 'Rider Profile',
           actions: [
             IconButton(
               tooltip: 'Settings',
@@ -408,7 +406,8 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                         'View rider and order updates',
                         () => Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const NotificationsScreen(),
+                            builder: (_) =>
+                                const NotificationsScreen(riderStyle: true),
                           ),
                         ),
                       ),
@@ -697,7 +696,7 @@ class _RiderEditProfileScreenState extends State<RiderEditProfileScreen> {
   @override
   Widget build(BuildContext context) => RiderVisualTheme(
     child: Scaffold(
-      appBar: AppBar(title: const Text('Edit Profile')),
+      appBar: const RiderAppBar(title: 'Edit Profile'),
       body: RiderImageBackground(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -725,6 +724,9 @@ class _RiderEditProfileScreenState extends State<RiderEditProfileScreen> {
                       await widget.onChangePhoto();
                       if (mounted) setState(() {});
                     },
+                    style: TextButton.styleFrom(
+                      foregroundColor: riderAccent(context),
+                    ),
                     icon: const Icon(Icons.photo_camera_outlined),
                     label: const Text('Change Photo'),
                   ),
@@ -877,7 +879,7 @@ class _RiderChangePasswordScreenState extends State<RiderChangePasswordScreen> {
   @override
   Widget build(BuildContext context) => RiderVisualTheme(
     child: Scaffold(
-      appBar: AppBar(title: const Text('Change Password')),
+      appBar: const RiderAppBar(title: 'Change Password'),
       body: RiderImageBackground(
         child: ListView(
           padding: const EdgeInsets.all(20),
@@ -943,9 +945,15 @@ Widget _profileSection(
     children: [
       Row(
         children: [
-          Icon(icon, color: Theme.of(context).colorScheme.primary),
+          Icon(icon, color: riderAccent(context)),
           const SizedBox(width: 8),
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: riderAccent(context),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
       const SizedBox(height: 14),
@@ -964,9 +972,31 @@ Widget _profileInput(
   IconData icon, {
   TextInputType? keyboard,
   bool readOnly = false,
-}) => TextField(
-  controller: controller,
-  keyboardType: keyboard,
-  readOnly: readOnly,
-  decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
-);
+}) {
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  final accent = riderAccent(context);
+  final fieldSurface = dark ? const Color(0xFF302720) : const Color(0xFFFFFCF7);
+  final fieldBorder = dark ? const Color(0xFF5E4C3F) : const Color(0xFFE2D3C1);
+  return TextField(
+    controller: controller,
+    keyboardType: keyboard,
+    readOnly: readOnly,
+    style: TextStyle(color: riderPrimaryText(context)),
+    decoration: InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: accent),
+      floatingLabelStyle: TextStyle(color: accent),
+      prefixIcon: Icon(icon, color: accent),
+      filled: true,
+      fillColor: fieldSurface,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: fieldBorder),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: accent, width: 1.6),
+      ),
+    ),
+  );
+}

@@ -177,8 +177,8 @@ class _RiderReportsScreenState extends State<RiderReportsScreen> {
 
     return RiderVisualTheme(
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Delivery Reports'),
+        appBar: RiderAppBar(
+          title: 'Delivery Reports',
           actions: [
             IconButton(
               tooltip: 'Refresh report',

@@ -189,7 +189,7 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
     final orderNumber = order is Map ? order['order_number']?.toString() : null;
     return RiderVisualTheme(
       child: Scaffold(
-        appBar: AppBar(title: Text(orderNumber ?? 'Delivery details')),
+        appBar: RiderAppBar(title: orderNumber ?? 'Delivery details'),
         body: _loading
             ? const Center(child: CircularProgressIndicator())
             : _delivery == null

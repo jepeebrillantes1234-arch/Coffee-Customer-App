@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -35,6 +37,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _placing = false;
   bool _addressChosenByCustomer = false;
   int _quoteSeq = 0;
+  String? _checkoutRequestId;
 
   @override
   void initState() {
@@ -103,6 +106,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Map<String, dynamic> _payload({bool forOrder = false}) => {
     'order_type': _type,
     if (forOrder) 'payment_method': _paymentMethod,
+    if (forOrder)
+      'checkout_request_id': _checkoutRequestId ??= _newCheckoutRequestId(),
     'items': Cart.I.lines.map((l) => l.toPayload()).toList(),
     'home_promos': Cart.I.bundles.map((bundle) => bundle.toPayload()).toList(),
     if (_promo.text.trim().isNotEmpty) 'promo_code': _promo.text.trim(),
@@ -118,6 +123,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     },
     if (forOrder && _notes.text.trim().isNotEmpty) 'notes': _notes.text.trim(),
   };
+
+  String _newCheckoutRequestId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
 
   Future<void> _refresh() async {
     final seq = ++_quoteSeq;
@@ -177,6 +193,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final payload = _payload(forOrder: true);
       final order = await Api.I.placeOrder(payload);
 
+      _checkoutRequestId = null;
       Cart.I.clear();
       SelectedPromo.I.clear();
       rootTab.value = 3;
@@ -561,7 +578,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           ),
                         if (items.isNotEmpty) const Divider(height: 18),
                         _row('Subtotal', peso(displayedSubtotal)),
-                        if (quote != null && dbl(quote['discount']) > 0)
+                        if (quote != null &&
+                            (quote.containsKey('promo_discount') ||
+                                quote.containsKey('membership_discount')) &&
+                            dbl(quote['promo_discount']) +
+                                    dbl(quote['first_order_discount']) >
+                                0)
+                          _row(
+                            'Promotion Discount',
+                            '-${peso(dbl(quote['promo_discount']) + dbl(quote['first_order_discount']))}',
+                            color: success,
+                          ),
+                        if (quote != null &&
+                            dbl(quote['membership_discount']) > 0)
+                          _row(
+                            'Member Discount${quote['membership_discount_percent'] == null ? '' : ' (${quote['membership_discount_percent']}%)'}',
+                            '-${peso(dbl(quote['membership_discount']))}',
+                            color: success,
+                          ),
+                        if (quote != null &&
+                            !quote.containsKey('promo_discount') &&
+                            dbl(quote['discount']) > 0)
                           _row(
                             'Discount${quote['discount_label'] == null ? '' : ' (${quote['discount_label']})'}',
                             '-${peso(dbl(quote['discount']))}',

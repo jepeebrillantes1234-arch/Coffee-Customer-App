@@ -277,17 +277,27 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   Widget build(BuildContext context) {
     return RiderVisualTheme(
       child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: riderDeepCoffee,
-          foregroundColor: Colors.white,
-          iconTheme: const IconThemeData(color: Colors.white),
-          automaticallyImplyLeading: false,
-          title: const SizedBox.shrink(),
+        appBar: RiderAppBar(
+          title: _tab == 0
+              ? 'Home'
+              : _tab == 1
+              ? 'My Deliveries'
+              : 'My History',
+          showBackButton: _tab != 0,
+          onBack: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              setState(() => _tab = 0);
+            }
+          },
           actions: [
             IconButton(
               tooltip: 'Notifications',
               onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const NotificationsScreen(riderStyle: true),
+                ),
               ),
               icon: const Icon(Icons.notifications_none_rounded),
             ),
@@ -449,13 +459,15 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: riderGold.withValues(alpha: .85), width: 1.3),
-        image: const DecorationImage(
-          image: AssetImage('assets/images/rider.png'),
-          fit: BoxFit.cover,
-          alignment: Alignment.topCenter,
-          colorFilter: ColorFilter.mode(Color(0x882A1005), BlendMode.darken),
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(22),
+          top: Radius.circular(12),
+        ),
+        border: Border.all(color: riderGold.withValues(alpha: .5), width: 1.1),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [riderCoffee, riderMediumBrown],
         ),
       ),
       child: Row(
@@ -629,16 +641,19 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           if (_error != null) _errorBanner(_error!),
-          Text(
-            _tab == 1 ? 'My Deliveries' : 'Delivery History',
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _tab == 1
-                ? 'Manage your assigned orders and delivery steps.'
-                : 'Review your recent delivery activity.',
-            style: TextStyle(color: riderSecondaryText(context)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface
+                  .withValues(alpha: .9),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              _tab == 1
+                  ? 'Manage your assigned orders and delivery steps.'
+                  : 'Review your recent delivery activity.',
+              style: TextStyle(color: riderPrimaryText(context)),
+            ),
           ),
           const SizedBox(height: 12),
           if (items.isEmpty)

@@ -114,7 +114,7 @@ class _RiderProofScreenState extends State<RiderProofScreen> {
 
     return RiderVisualTheme(
       child: Scaffold(
-        appBar: AppBar(title: const Text('Delivery confirmation')),
+        appBar: const RiderAppBar(title: 'Delivery confirmation'),
         body: RiderImageBackground(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),

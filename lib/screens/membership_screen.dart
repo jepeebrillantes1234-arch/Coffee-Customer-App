@@ -2,11 +2,11 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
 import '../core/widgets.dart';
 import 'redeem_points_screen.dart';
+import 'qrph_payment_screen.dart';
 
 class MembershipScreen extends StatefulWidget {
   const MembershipScreen({super.key});
@@ -22,6 +22,9 @@ class _MembershipScreenState extends State<MembershipScreen>
   List<Map<String, dynamic>> _rewards = [];
   List<Map<String, dynamic>> _redemptions = [];
   int _monthlyPointsValue = 0;
+  double _membershipPrice = 100;
+  double _memberDiscountPercent = 10;
+  bool _memberDiscountEnabled = true;
   bool _loading = true;
   bool _busy = false;
   bool _verifying = false;
@@ -70,12 +73,17 @@ class _MembershipScreenState extends State<MembershipScreen>
       if (!mounted) return;
       final summary = values[0] as Map<String, dynamic>;
       setState(() {
+        _membershipPrice =
+            (summary['membership_card_price'] as num?)?.toDouble() ?? 100;
+        _memberDiscountPercent =
+            (summary['membership_discount_percent'] as num?)?.toDouble() ?? 10;
+        _memberDiscountEnabled = summary['membership_discount_enabled'] == true;
         _membership = summary['membership'] is Map
             ? Map<String, dynamic>.from(summary['membership'] as Map)
             : null;
-        _cardDesignUrl = (summary['card_design_front_url'] ??
-                summary['card_design_url'])
-            ?.toString();
+        _cardDesignUrl =
+            (summary['card_design_front_url'] ?? summary['card_design_url'])
+                ?.toString();
         _cardBackDesignUrl = summary['card_design_back_url']?.toString();
         _transactions = (summary['transactions'] as List? ?? [])
             .whereType<Map>()
@@ -105,23 +113,17 @@ class _MembershipScreenState extends State<MembershipScreen>
     setState(() => _busy = true);
     try {
       final checkout = await Api.I.startMembershipCheckout();
-      final url = fixUrl(checkout['checkout_url']?.toString());
-      if (url.isEmpty) {
-        throw ApiException('The payment page is not available. Please retry.');
-      }
-      final opened = await launchUrl(
-        Uri.parse(url),
-        mode: LaunchMode.externalApplication,
+      if (!mounted) return;
+      final activated = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => QrphPaymentScreen.membership(checkout: checkout),
+        ),
       );
-      if (!opened) throw ApiException('Could not open the payment page.');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Complete the â‚±100 payment, then return here.'),
-          ),
-        );
+      if (activated == true && mounted) {
+        await _load();
+      } else if (mounted) {
+        await _refreshQuietly();
       }
-      await _refreshQuietly();
     } on ApiException catch (error) {
       _message(error.message);
     } catch (error) {
@@ -138,12 +140,19 @@ class _MembershipScreenState extends State<MembershipScreen>
       final summary = await Api.I.verifyMembershipPayment();
       if (!mounted) return;
       setState(() {
+        _membershipPrice =
+            (summary['membership_card_price'] as num?)?.toDouble() ??
+            _membershipPrice;
+        _memberDiscountPercent =
+            (summary['membership_discount_percent'] as num?)?.toDouble() ??
+            _memberDiscountPercent;
+        _memberDiscountEnabled = summary['membership_discount_enabled'] == true;
         _membership = summary['membership'] is Map
             ? Map<String, dynamic>.from(summary['membership'] as Map)
             : null;
-        _cardDesignUrl = (summary['card_design_front_url'] ??
-                summary['card_design_url'])
-            ?.toString();
+        _cardDesignUrl =
+            (summary['card_design_front_url'] ?? summary['card_design_url'])
+                ?.toString();
         _cardBackDesignUrl = summary['card_design_back_url']?.toString();
         _transactions = (summary['transactions'] as List? ?? [])
             .whereType<Map>()
@@ -164,12 +173,19 @@ class _MembershipScreenState extends State<MembershipScreen>
       final summary = await Api.I.loyaltySummary();
       if (!mounted) return;
       setState(() {
+        _membershipPrice =
+            (summary['membership_card_price'] as num?)?.toDouble() ??
+            _membershipPrice;
+        _memberDiscountPercent =
+            (summary['membership_discount_percent'] as num?)?.toDouble() ??
+            _memberDiscountPercent;
+        _memberDiscountEnabled = summary['membership_discount_enabled'] == true;
         _membership = summary['membership'] is Map
             ? Map<String, dynamic>.from(summary['membership'] as Map)
             : null;
-        _cardDesignUrl = (summary['card_design_front_url'] ??
-                summary['card_design_url'])
-            ?.toString();
+        _cardDesignUrl =
+            (summary['card_design_front_url'] ?? summary['card_design_url'])
+                ?.toString();
         _cardBackDesignUrl = summary['card_design_back_url']?.toString();
         _transactions = (summary['transactions'] as List? ?? [])
             .whereType<Map>()
@@ -216,9 +232,8 @@ class _MembershipScreenState extends State<MembershipScreen>
 
   void _message(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -283,7 +298,9 @@ class _MembershipScreenState extends State<MembershipScreen>
                       ),
                     ),
                   ),
-                  if (_rewards.any((reward) => reward['reward_type'] != 'free_product')) ...[
+                  if (_rewards.any(
+                    (reward) => reward['reward_type'] != 'free_product',
+                  )) ...[
                     const SizedBox(height: 16),
                     _sectionTitle('Other rewards'),
                     for (final reward in _rewards.where(
@@ -294,28 +311,40 @@ class _MembershipScreenState extends State<MembershipScreen>
                   const SizedBox(height: 22),
                   _sectionTitle('Redemption history'),
                   if (_redemptions.isEmpty)
-                    const _EmptyNotice('Your redeemed rewards will appear here.'),
+                    const _EmptyNotice(
+                      'Your redeemed rewards will appear here.',
+                    ),
                   for (final redemption in _redemptions)
                     _redemptionRow(redemption),
                   const SizedBox(height: 22),
                   _sectionTitle('Points history'),
                   if (_transactions.isEmpty)
-                    const _EmptyNotice('Points earned and redeemed will appear here.'),
+                    const _EmptyNotice(
+                      'Points earned and redeemed will appear here.',
+                    ),
                   for (final transaction in _transactions)
                     _transactionRow(transaction),
                 ],
               ),
             ),
       floatingActionButton: _busy
-          ? const FloatingActionButton(onPressed: null, child: CircularProgressIndicator())
+          ? const FloatingActionButton(
+              onPressed: null,
+              child: CircularProgressIndicator(),
+            )
           : null,
     );
   }
 
   Widget _membershipCard(ColorScheme colors) {
-    final memberId = _membership?['member_id']?.toString() ?? 'Issued after payment';
+    final memberId =
+        _membership?['member_id']?.toString() ?? 'Issued after payment';
     final latestPayment = _membership?['latest_payment'];
-    final paymentPending = latestPayment is Map && latestPayment['status'] == 'pending';
+    final paymentPending =
+        latestPayment is Map && latestPayment['status'] == 'pending';
+    final paymentAmount = latestPayment is Map && latestPayment['amount'] is num
+        ? (latestPayment['amount'] as num).toDouble()
+        : _membershipPrice;
     final memberSince = _formatMemberSince(
       _active
           ? (_membership?['member_since'] ??
@@ -388,7 +417,9 @@ class _MembershipScreenState extends State<MembershipScreen>
               label: AnimatedBuilder(
                 animation: _cardFlipController,
                 builder: (_, _) => Text(
-                  _cardFlipController.value < 0.5 ? 'View card back' : 'View card front',
+                  _cardFlipController.value < 0.5
+                      ? 'View card back'
+                      : 'View card front',
                 ),
               ),
             ),
@@ -396,23 +427,34 @@ class _MembershipScreenState extends State<MembershipScreen>
               const SizedBox(height: 4),
               Text(
                 _membership == null
-                ? 'Pay PHP 100 to activate your membership card.'
+                    ? 'Pay PHP ${paymentAmount.toStringAsFixed(2)} to activate your membership card.'
                     : 'Membership is ${'${_membership!['status'] ?? 'inactive'}'.toLowerCase()}.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: colors.onSurfaceVariant),
               ),
               const SizedBox(height: 8),
               FilledButton.icon(
-                onPressed: _busy
-                    ? null
-                    : (paymentPending ? _verifyPayment : _startPayment),
+                onPressed: _busy ? null : _startPayment,
                 icon: Icon(
-                  paymentPending ? Icons.refresh_rounded : Icons.credit_card_rounded,
+                  paymentPending
+                      ? Icons.qr_code_2_rounded
+                      : Icons.credit_card_rounded,
                 ),
                 label: Text(
-                  paymentPending ? 'Check payment status' : 'Get membership - PHP 100',
+                  paymentPending
+                      ? 'View QR / Check Payment'
+                      : 'Get membership - PHP ${paymentAmount.toStringAsFixed(2)}',
                 ),
               ),
+              if (_memberDiscountEnabled && _memberDiscountPercent > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    'Active members receive ${_memberDiscountPercent.toStringAsFixed(_memberDiscountPercent % 1 == 0 ? 0 : 2)}% off eligible products.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: colors.onSurfaceVariant),
+                  ),
+                ),
               if (paymentPending && latestPayment['checkout_url'] != null)
                 TextButton(
                   onPressed: _startPayment,
@@ -496,7 +538,9 @@ class _MembershipScreenState extends State<MembershipScreen>
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
                       fontSize: 17 * scale,
-                      shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
+                      shadows: const [
+                        Shadow(color: Colors.black54, blurRadius: 4),
+                      ],
                     ),
                   ),
                   SizedBox(height: height * .008),
@@ -569,10 +613,8 @@ class _MembershipScreenState extends State<MembershipScreen>
     return _cardDesignImage(_cardDesignUrl, 'assets/images/card.png');
   }
 
-  Widget _membershipCardBack() => _cardDesignImage(
-    _cardBackDesignUrl,
-    'assets/images/card1.png',
-  );
+  Widget _membershipCardBack() =>
+      _cardDesignImage(_cardBackDesignUrl, 'assets/images/card1.png');
 
   Widget _cardDesignImage(String? imageUrl, String fallbackAsset) {
     final fallback = Image.asset(
@@ -608,26 +650,52 @@ class _MembershipScreenState extends State<MembershipScreen>
     final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
     if (date == null) return 'Pending activation';
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[date.month - 1]} ${date.year}';
   }
+
   Widget _metricCard(String title, String value, IconData icon) => Card(
     child: Padding(
       padding: const EdgeInsets.all(15),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(height: 10),
-        Text(value, style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800)),
-        Text(title, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
+          ),
+          Text(
+            title,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 
   Widget _sectionTitle(String title) => Padding(
     padding: const EdgeInsets.only(bottom: 9),
-    child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+    child: Text(
+      title,
+      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+    ),
   );
 
   Future<void> _redeem(Map<String, dynamic> reward) async {
@@ -640,18 +708,30 @@ class _MembershipScreenState extends State<MembershipScreen>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Redeem reward?'),
-        content: Text('Use $cost points for ${reward['name'] ?? 'this reward'}?'),
+        content: Text(
+          'Use $cost points for ${reward['name'] ?? 'this reward'}?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Redeem')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Redeem'),
+          ),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
     setState(() => _busy = true);
     try {
-      final key = '${DateTime.now().microsecondsSinceEpoch}-${DateTime.now().millisecondsSinceEpoch}';
-      final result = await Api.I.redeemReward((reward['id'] as num).toInt(), key);
+      final key =
+          '${DateTime.now().microsecondsSinceEpoch}-${DateTime.now().millisecondsSinceEpoch}';
+      final result = await Api.I.redeemReward(
+        (reward['id'] as num).toInt(),
+        key,
+      );
       await _load();
       if (mounted) {
         await _showRedemption(
@@ -690,17 +770,36 @@ class _MembershipScreenState extends State<MembershipScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('${reward['name'] ?? 'Reward'}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                  Text(
+                    '${reward['name'] ?? 'Reward'}',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
                   if ((reward['description'] ?? '').toString().isNotEmpty)
-                    Text('${reward['description']}', maxLines: 2, overflow: TextOverflow.ellipsis),
-                  Text('$cost points', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
+                    Text(
+                      '${reward['description']}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  Text(
+                    '$cost points',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   if (product is Map && product['name'] != null)
-                    Text('For ${product['name']}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
+                    Text(
+                      'For ${product['name']}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
                 ],
               ),
             ),
           ),
-          Padding(    
+          Padding(
             padding: const EdgeInsets.only(right: 10),
             child: FilledButton(
               onPressed: available ? () => _redeem(reward) : null,
@@ -716,8 +815,13 @@ class _MembershipScreenState extends State<MembershipScreen>
     child: ListTile(
       leading: const Icon(Icons.redeem_rounded),
       title: Text('${row['reward_name'] ?? 'Reward'}'),
-      subtitle: Text('${row['code'] ?? ''} Â· ${row['points_spent'] ?? 0} points'),
-      trailing: Text('${row['status'] ?? 'pending'}'.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800)),
+      subtitle: Text(
+        '${row['code'] ?? ''} Â· ${row['points_spent'] ?? 0} points',
+      ),
+      trailing: Text(
+        '${row['status'] ?? 'pending'}'.toUpperCase(),
+        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+      ),
       onTap: () => _showRedemption(row),
     ),
   );
@@ -728,10 +832,20 @@ class _MembershipScreenState extends State<MembershipScreen>
     return Card(
       child: ListTile(
         dense: true,
-        leading: Icon(points >= 0 ? Icons.add_circle_outline : Icons.remove_circle_outline, color: points >= 0 ? Colors.green : Colors.deepOrange),
-        title: Text('${row['description'] ?? row['type'] ?? 'Points activity'}'),
-        subtitle: Text('${row['order_number'] ?? ''}${date == null ? '' : ' Â· ${date.month}/${date.day}/${date.year}'}'),
-        trailing: Text('${points > 0 ? '+' : ''}$points', style: const TextStyle(fontWeight: FontWeight.w800)),
+        leading: Icon(
+          points >= 0 ? Icons.add_circle_outline : Icons.remove_circle_outline,
+          color: points >= 0 ? Colors.green : Colors.deepOrange,
+        ),
+        title: Text(
+          '${row['description'] ?? row['type'] ?? 'Points activity'}',
+        ),
+        subtitle: Text(
+          '${row['order_number'] ?? ''}${date == null ? '' : ' Â· ${date.month}/${date.day}/${date.year}'}',
+        ),
+        trailing: Text(
+          '${points > 0 ? '+' : ''}$points',
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
       ),
     );
   }
@@ -743,6 +857,9 @@ class _EmptyNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
-    child: Text(text, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+    child: Text(
+      text,
+      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+    ),
   );
 }

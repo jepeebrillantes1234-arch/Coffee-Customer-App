@@ -195,7 +195,27 @@ class _RiderChatScreenState extends State<RiderChatScreen> {
         : name;
     final screen = Scaffold(
       appBar: AppBar(
-        titleSpacing: 0,
+        backgroundColor: widget.isRider ? riderCoffee : null,
+        foregroundColor: widget.isRider ? riderCream : null,
+        iconTheme: widget.isRider
+            ? const IconThemeData(color: riderCream)
+            : null,
+        automaticallyImplyLeading: !widget.isRider,
+        leadingWidth: widget.isRider ? 104 : null,
+        leading: widget.isRider
+            ? Row(
+                children: [
+                  const SizedBox(width: 10),
+                  riderLogoBadge(),
+                  IconButton(
+                    tooltip: 'Back',
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                ],
+              )
+            : null,
+        titleSpacing: widget.isRider ? 0 : null,
         title: Row(
           children: [
             CircleAvatar(

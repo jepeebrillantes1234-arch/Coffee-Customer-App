@@ -2,30 +2,31 @@ import 'package:flutter/material.dart';
 
 /// Coffee, cream, and gold palette used by the Rider module.
 const riderGreen = Color(0xFF176B67);
-const riderCharcoal = Color(0xFF3A190A);
+const riderCharcoal = Color(0xFF3A3028);
 const riderTeal = Color(0xFF168A83);
 const riderMutedTeal = Color(0xFFE3F1EF);
-const riderCoffee = Color(0xFF4B210D);
-const riderDeepCoffee = Color(0xFF2A1005);
-const riderGold = Color(0xFFE8AF4B);
-const riderCream = Color(0xFFFFF3E0);
-const riderMutedBrown = Color(0xFF7A604D);
+const riderCoffee = Color(0xFF5A3828);
+const riderMediumBrown = Color(0xFF765039);
+const riderDeepCoffee = Color(0xFF402B20);
+const riderGold = Color(0xFFB58A55);
+const riderCream = Color(0xFFF5EBDD);
+const riderMutedBrown = Color(0xFF765039);
 
 ThemeData riderThemeData(BuildContext context) {
   final base = Theme.of(context);
   final dark = base.brightness == Brightness.dark;
-  final surface = dark ? const Color(0xFF24160F) : const Color(0xFFFFFCF7);
-  final raised = dark ? const Color(0xFF342319) : Colors.white;
+  final surface = dark ? const Color(0xFF241E19) : const Color(0xFFFFFCF7);
+  final raised = dark ? const Color(0xFF302720) : Colors.white;
   final scheme = base.colorScheme.copyWith(
     primary: dark ? riderGold : riderCoffee,
-    onPrimary: dark ? riderDeepCoffee : Colors.white,
-    secondary: riderGold,
+    onPrimary: dark ? const Color(0xFF241A13) : Colors.white,
+    secondary: riderMediumBrown,
     surface: surface,
-    onSurface: dark ? const Color(0xFFFFF6EB) : const Color(0xFF2E1A10),
+    onSurface: dark ? riderCream : const Color(0xFF35261D),
     surfaceContainerHighest: dark
-        ? const Color(0xFF3A291E)
-        : const Color(0xFFFFEBD0),
-    outlineVariant: dark ? const Color(0xFF624B39) : const Color(0xFFE9D1AF),
+        ? const Color(0xFF3A3028)
+        : const Color(0xFFEDE1D1),
+    outlineVariant: dark ? const Color(0xFF5E4C3F) : const Color(0xFFE2D3C1),
   );
 
   return base.copyWith(
@@ -34,13 +35,13 @@ ThemeData riderThemeData(BuildContext context) {
       bodyColor: scheme.onSurface,
       displayColor: scheme.onSurface,
     ),
-    scaffoldBackgroundColor: dark ? const Color(0xFF1B100A) : riderCream,
+    scaffoldBackgroundColor: dark ? const Color(0xFF1C1713) : riderCream,
     appBarTheme: base.appBarTheme.copyWith(
-      backgroundColor: riderDeepCoffee,
-      foregroundColor: Colors.white,
-      iconTheme: const IconThemeData(color: Colors.white),
+      backgroundColor: riderCoffee,
+      foregroundColor: riderCream,
+      iconTheme: const IconThemeData(color: riderCream),
       titleTextStyle: const TextStyle(
-        color: Colors.white,
+        color: riderCream,
         fontSize: 18,
         fontWeight: FontWeight.w800,
       ),
@@ -55,7 +56,7 @@ ThemeData riderThemeData(BuildContext context) {
       ),
     ),
     navigationBarTheme: base.navigationBarTheme.copyWith(
-      backgroundColor: dark ? riderDeepCoffee : const Color(0xFFFFF9F0),
+      backgroundColor: dark ? riderCoffee : const Color(0xFFF0E5D6),
       indicatorColor: riderGold.withValues(alpha: dark ? .32 : .27),
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
@@ -85,6 +86,20 @@ ThemeData riderThemeData(BuildContext context) {
             : null,
       ),
     ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: dark ? riderCream : riderCoffee,
+        side: BorderSide(color: scheme.outlineVariant),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    ),
     inputDecorationTheme: base.inputDecorationTheme.copyWith(
       filled: true,
       fillColor: raised,
@@ -103,7 +118,7 @@ ThemeData riderThemeData(BuildContext context) {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: riderGold, width: 1.6),
+        borderSide: BorderSide(color: riderGold, width: 1.6),
       ),
     ),
   );
@@ -145,7 +160,7 @@ class RiderImageBackground extends StatelessWidget {
         ColoredBox(
           color: dark
               ? Colors.black.withValues(alpha: .68)
-              : riderCream.withValues(alpha: .12),
+              : riderCream.withValues(alpha: .32),
         ),
         child,
       ],
@@ -158,13 +173,71 @@ Color riderAccent(BuildContext context) =>
 
 Color riderPrimaryText(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark
-    ? const Color(0xFFFFF5E8)
-    : const Color(0xFF2E1A10);
+    ? riderCream
+    : const Color(0xFF35261D);
 
 Color riderSecondaryText(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark
-    ? const Color(0xFFD8C3B0)
+    ? const Color(0xFFD6C7B7)
     : riderMutedBrown;
+
+class RiderAppBar extends StatelessWidget implements PreferredSizeWidget {
+  const RiderAppBar({
+    super.key,
+    required this.title,
+    this.actions = const [],
+    this.showBackButton = true,
+    this.onBack,
+  });
+
+  final String title;
+  final List<Widget> actions;
+  final bool showBackButton;
+  final VoidCallback? onBack;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+
+  @override
+  Widget build(BuildContext context) => AppBar(
+    backgroundColor: riderCoffee,
+    foregroundColor: riderCream,
+    automaticallyImplyLeading: false,
+    leadingWidth: showBackButton ? 104 : 60,
+    leading: Row(
+      children: [
+        const SizedBox(width: 10),
+        riderLogoBadge(),
+        if (showBackButton)
+          IconButton(
+            tooltip: 'Back',
+            onPressed: onBack ?? () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+      ],
+    ),
+    title: Text(
+      title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.titleMedium
+          ?.copyWith(color: riderCream, fontWeight: FontWeight.w800),
+    ),
+    centerTitle: false,
+    actions: actions,
+  );
+}
+
+Widget riderLogoBadge() => Container(
+  width: 40,
+  height: 40,
+  padding: const EdgeInsets.all(3),
+  decoration: BoxDecoration(
+    color: riderCream,
+    borderRadius: BorderRadius.circular(11),
+  ),
+  child: Image.asset('assets/images/logo1.png', fit: BoxFit.contain),
+);
 
 String deliveryStatusLabel(String s) {
   switch (s) {
