@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/api.dart';
+import '../core/realtime.dart';
 import '../core/util.dart';
 import '../screens/auth_screen.dart';
 import 'rider_profile_screen.dart';
@@ -41,6 +43,9 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   late int _tab;
   bool _profileOpening = false;
   Timer? _poll;
+  StreamSubscription<Map<String, dynamic>>? _liveSubscription;
+  int _unreadNotifications = 0;
+  bool _loadingUnread = false;
 
   int get _activeDeliveryCount {
     const activeStatuses = {'assigned', 'accepted', 'picked_up', 'on_the_way'};
@@ -58,16 +63,49 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     super.initState();
     _tab = widget.initialTab.clamp(0, 2).toInt();
     _load();
-    _poll = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) => _load(silent: true),
-    );
+    unawaited(Realtime.I.connect());
+    _liveSubscription = Realtime.I.updates.listen((event) {
+      if (event['kind'] == 'notification') {
+        _loadUnreadNotifications(alert: true);
+      }
+    });
+    _loadUnreadNotifications();
+    _poll = Timer.periodic(const Duration(seconds: 15), (_) {
+      _load(silent: true);
+      _loadUnreadNotifications(alert: true);
+    });
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    _liveSubscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadUnreadNotifications({bool alert = false}) async {
+    if (_loadingUnread || !Api.I.loggedIn) return;
+    _loadingUnread = true;
+    try {
+      final response = await Api.I.notifications();
+      if (!mounted) return;
+      final unreadValue = response['unread'];
+      final unread = unreadValue is num
+          ? unreadValue.toInt()
+          : int.tryParse(unreadValue?.toString() ?? '') ?? 0;
+      final hasNew = alert && unread > _unreadNotifications;
+      setState(() => _unreadNotifications = unread);
+      if (hasNew && _tab == 0 && ModalRoute.of(context)?.isCurrent == true) {
+        SystemSound.play(SystemSoundType.alert);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You have a new notification.')),
+        );
+      }
+    } catch (_) {
+      // Notification polling must not block rider dashboard use.
+    } finally {
+      _loadingUnread = false;
+    }
   }
 
   Future<void> _load({bool silent = false}) async {
@@ -284,6 +322,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
               ? 'My Deliveries'
               : 'My History',
           showBackButton: _tab != 0,
+          showLogo: _tab == 0,
           onBack: () {
             if (Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
@@ -291,17 +330,27 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
               setState(() => _tab = 0);
             }
           },
-          actions: [
-            IconButton(
-              tooltip: 'Notifications',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const NotificationsScreen(riderStyle: true),
-                ),
-              ),
-              icon: const Icon(Icons.notifications_none_rounded),
-            ),
-          ],
+          actions: _tab == 0
+              ? [
+                  IconButton(
+                    tooltip: 'Notifications',
+                    onPressed: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              const NotificationsScreen(riderStyle: true),
+                        ),
+                      );
+                      _loadUnreadNotifications();
+                    },
+                    icon: Badge(
+                      isLabelVisible: _unreadNotifications > 0,
+                      label: Text('$_unreadNotifications'),
+                      child: const Icon(Icons.notifications_none_rounded),
+                    ),
+                  ),
+                ]
+              : const [],
         ),
         body: RiderImageBackground(
           image: _tab == 0

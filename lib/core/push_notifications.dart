@@ -253,6 +253,9 @@ class PushNotifications {
 
   Future<void> _showForegroundMessage(RemoteMessage message) async {
     if (_isCurrentRiderChat(message)) return;
+    // Rider alerts are surfaced from the Dashboard's notification inbox only.
+    // Keep the customer foreground notification behavior unchanged.
+    if (Api.I.role == 'rider') return;
     final copy = _notificationCopy(message);
     final text = '${copy.$1}\n${copy.$2}';
     if (text.isEmpty) return;

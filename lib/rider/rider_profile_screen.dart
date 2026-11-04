@@ -5,7 +5,6 @@ import '../core/api.dart';
 import '../core/theme.dart';
 import '../screens/auth_screen.dart';
 import '../screens/customer_service_sheet.dart';
-import '../screens/notifications_screen.dart';
 import 'rider_home_screen.dart';
 import 'rider_location_service.dart';
 import 'rider_membership_card_deliveries_screen.dart';
@@ -409,18 +408,6 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                         () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => const RiderReportsScreen(),
-                          ),
-                        ),
-                      ),
-                      _menuTile(
-                        context,
-                        Icons.notifications_none_rounded,
-                        'Notifications',
-                        'View rider and order updates',
-                        () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                const NotificationsScreen(riderStyle: true),
                           ),
                         ),
                       ),

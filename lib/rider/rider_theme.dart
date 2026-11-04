@@ -187,12 +187,14 @@ class RiderAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.title,
     this.actions = const [],
     this.showBackButton = true,
+    this.showLogo = false,
     this.onBack,
   });
 
   final String title;
   final List<Widget> actions;
   final bool showBackButton;
+  final bool showLogo;
   final VoidCallback? onBack;
 
   @override
@@ -203,11 +205,11 @@ class RiderAppBar extends StatelessWidget implements PreferredSizeWidget {
     backgroundColor: riderCoffee,
     foregroundColor: riderCream,
     automaticallyImplyLeading: false,
-    leadingWidth: showBackButton ? 104 : 60,
+    leadingWidth: (showLogo ? 58 : 0) + (showBackButton ? 48 : 0),
     leading: Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(width: 10),
-        riderLogoBadge(),
+        if (showLogo) ...[const SizedBox(width: 10), riderLogoBadge()],
         if (showBackButton)
           IconButton(
             tooltip: 'Back',

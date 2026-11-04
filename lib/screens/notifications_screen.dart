@@ -247,7 +247,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final screen = Scaffold(
       backgroundColor: page,
       appBar: widget.riderStyle
-          ? RiderAppBar(title: 'Notifications', actions: [notificationAction])
+          ? const RiderAppBar(title: 'Notifications')
           : AppBar(
               backgroundColor: page,
               leading: IconButton(
