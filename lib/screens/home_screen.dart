@@ -719,7 +719,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          Text('Asia/Manila', style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            'KJM Urdaneta City',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
       ),
     );
