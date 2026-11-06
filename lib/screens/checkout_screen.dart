@@ -29,12 +29,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _locationName = TextEditingController();
   final _notes = TextEditingController();
   final _promo = TextEditingController();
+  final _phone = TextEditingController();
+  final _checkoutFormKey = GlobalKey<FormState>();
 
   Map<String, dynamic>? _quote;
   Map<String, dynamic>? _shopHours;
   String? _error;
   bool _quoting = false;
   bool _placing = false;
+  bool _profileLoading = true;
+  bool _phoneEdited = false;
   bool _addressChosenByCustomer = false;
   bool _qrCheckoutFailed = false;
   int _quoteSeq = 0;
@@ -43,6 +47,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   void initState() {
     super.initState();
+    _phone.text = '${Api.I.user?['phone'] ?? ''}';
+    _refreshCustomerPhone();
     if (AppState.online) _paymentMethod = 'qrph';
     _promo.text = SelectedPromo.I.code ?? ''; // Automatic code from Home
     _loadShopHours();
@@ -61,6 +67,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     } catch (_) {
       // The checkout preview and order endpoint remain authoritative.
+    }
+  }
+
+  Future<void> _refreshCustomerPhone() async {
+    try {
+      final profile = await Api.I.refreshProfile();
+      if (!mounted || _phoneEdited) return;
+      setState(() => _phone.text = '${profile['phone'] ?? ''}');
+    } on ApiException {
+      // Keep the cached value and let the server validate checkout.
+    } finally {
+      if (mounted) setState(() => _profileLoading = false);
     }
   }
 
@@ -101,11 +119,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _locationName.dispose();
     _notes.dispose();
     _promo.dispose();
+    _phone.dispose();
     super.dispose();
   }
 
   Map<String, dynamic> _payload({bool forOrder = false}) => {
     'order_type': _type,
+    if (forOrder) 'contact_phone': _normalizedPhone(_phone.text),
     if (forOrder) 'payment_method': _paymentMethod,
     if (forOrder)
       'checkout_request_id': _checkoutRequestId ??= _newCheckoutRequestId(),
@@ -188,6 +208,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _place() async {
+    if (!(_checkoutFormKey.currentState?.validate() ?? false)) return;
     setState(() => _placing = true);
     final nav = Navigator.of(context);
     try {
@@ -230,6 +251,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       !_quoting &&
       !_placing &&
       (_type == 'pickup' || (_pin != null && _address.text.trim().isNotEmpty));
+
+  String _normalizedPhone(String value) {
+    final phone = value.replaceAll(RegExp(r'[\s()\-]'), '');
+    if (phone.startsWith('+63')) return '0${phone.substring(3)}';
+    if (phone.startsWith('63')) return '0${phone.substring(2)}';
+    return phone;
+  }
+
+  bool _isValidPhone(String value) =>
+      RegExp(r'^09\d{9}$').hasMatch(_normalizedPhone(value));
 
   Widget _shopHoursCard(bool closed) {
     final hours = _shopHours!;
@@ -330,364 +361,421 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       body: Column(
         children: [
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
-              children: [
-                if (_shopHours != null) ...[
-                  _shopHoursCard(shopClosed),
-                  const SizedBox(height: 14),
-                ],
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(
-                      value: 'delivery',
-                      label: Text('Delivery'),
-                      icon: Icon(Icons.delivery_dining_rounded),
-                    ),
-                    ButtonSegment(
-                      value: 'pickup',
-                      label: Text('Pickup'),
-                      icon: Icon(Icons.storefront_rounded),
-                    ),
+            child: Form(
+              key: _checkoutFormKey,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+                children: [
+                  if (_shopHours != null) ...[
+                    _shopHoursCard(shopClosed),
+                    const SizedBox(height: 14),
                   ],
-                  selected: {_type},
-                  onSelectionChanged: (selection) {
-                    setState(() {
-                      _type = selection.first;
-                      if (_type == 'pickup' && _paymentMethod == 'cod') {
-                        _paymentMethod = 'cash';
-                      } else if (_type == 'delivery' &&
-                          _paymentMethod == 'cash') {
-                        _paymentMethod = 'cod';
-                      }
-                    });
-                    _refresh();
-                  },
-                ),
-                const SizedBox(height: 20),
-                if (_type == 'delivery') ...[
-                  _sectionTitle('Delivery Address'),
-                  _sectionCard(
-                    child: ListTile(
-                      onTap: _selectDeliveryAddress,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 13,
-                        vertical: 4,
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'delivery',
+                        label: Text('Delivery'),
+                        icon: Icon(Icons.delivery_dining_rounded),
                       ),
-                      leading: Icon(
-                        Icons.location_on_outlined,
-                        color: Theme.of(context).colorScheme.primary,
+                      ButtonSegment(
+                        value: 'pickup',
+                        label: Text('Pickup'),
+                        icon: Icon(Icons.storefront_rounded),
                       ),
-                      title: Text(
-                        address.isEmpty ? 'Choose a delivery address' : address,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: Text(
-                        _pin == null
-                            ? 'Required for delivery'
-                            : _locationName.text.trim().isEmpty
-                            ? 'Delivery location selected'
-                            : _locationName.text.trim(),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                    ),
+                    ],
+                    selected: {_type},
+                    onSelectionChanged: (selection) {
+                      setState(() {
+                        _type = selection.first;
+                        if (_type == 'pickup' && _paymentMethod == 'cod') {
+                          _paymentMethod = 'cash';
+                        } else if (_type == 'delivery' &&
+                            _paymentMethod == 'cash') {
+                          _paymentMethod = 'cod';
+                        }
+                      });
+                      _refresh();
+                    },
                   ),
-                  const SizedBox(height: 17),
-                ],
-                _sectionTitle('Payment Method'),
-                _sectionCard(
-                  child: Column(
-                    children: [
-                      ListTile(
-                        dense: true,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                  const SizedBox(height: 20),
+                  if (_type == 'delivery') ...[
+                    _sectionTitle('Delivery Address'),
+                    _sectionCard(
+                      child: ListTile(
+                        onTap: _selectDeliveryAddress,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 13,
+                          vertical: 4,
                         ),
-                        selected: _paymentMethod != 'qrph',
-                        selectedTileColor: Theme.of(context).colorScheme.primary
-                            .withValues(alpha: .06),
-                        onTap: () => setState(
-                          () => _paymentMethod = _type == 'delivery'
-                              ? 'cod'
-                              : 'cash',
-                        ),
-                        leading: Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primaryContainer,
-                            borderRadius: BorderRadius.circular(13),
-                          ),
-                          child: Icon(
-                            _type == 'delivery'
-                                ? Icons.local_shipping_rounded
-                                : Icons.storefront_rounded,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
-                            size: 23,
-                          ),
+                        leading: Icon(
+                          Icons.location_on_outlined,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                         title: Text(
-                          _type == 'delivery'
-                              ? 'Cash on Delivery'
-                              : 'Cash at Pickup',
-                          style: const TextStyle(
+                          address.isEmpty
+                              ? 'Choose a delivery address'
+                              : address,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         subtitle: Text(
-                          _type == 'delivery'
-                              ? 'Pay the rider when your order arrives.'
-                              : 'Pay at the shop counter.',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                        trailing: Icon(
-                          _paymentMethod == 'qrph'
-                              ? Icons.radio_button_unchecked
-                              : Icons.radio_button_checked,
-                          color: _paymentMethod == 'qrph'
-                              ? Theme.of(context).colorScheme.onSurfaceVariant
-                              : Theme.of(context).colorScheme.primary,
-                          size: 19,
-                        ),
-                      ),
-                      const Divider(height: 1, indent: 54),
-                      ListTile(
-                        dense: true,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        selected: _paymentMethod == 'qrph',
-                        selectedTileColor: Theme.of(context).colorScheme.primary
-                            .withValues(alpha: .06),
-                        enabled: AppState.online,
-                        onTap: AppState.online
-                            ? () => setState(() => _paymentMethod = 'qrph')
-                            : null,
-                        leading: Container(
-                          width: 42,
-                          height: 42,
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Theme.of(context).dividerColor,
-                            ),
-                          ),
-                          child: Image.asset(
-                            'assets/images/qrph.png',
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) => Icon(
-                              Icons.qr_code_2_rounded,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                        ),
-                        title: Text(
-                          'QRPh',
+                          _pin == null
+                              ? 'Required for delivery'
+                              : _locationName.text.trim().isEmpty
+                              ? 'Delivery location selected'
+                              : _locationName.text.trim(),
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 11,
                             color: Theme.of(context)
                                 .colorScheme
                                 .onSurfaceVariant,
                           ),
                         ),
-                        subtitle: Text(
-                          _qrCheckoutFailed
-                              ? 'Retry QRPh Setup'
-                              : AppState.online
-                              ? 'Scan and pay with any QRPh-enabled wallet or banking app.'
-                              : 'Unavailable until the shop configures online payment.',
-                          style: const TextStyle(fontSize: 11),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 17),
+                  ],
+                  _sectionTitle('Contact Number'),
+                  _sectionCard(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 13,
+                        vertical: 5,
+                      ),
+                      child: TextFormField(
+                        controller: _phone,
+                        keyboardType: TextInputType.phone,
+                        textInputAction: TextInputAction.next,
+                        onChanged: (_) {
+                          _phoneEdited = true;
+                          setState(() {});
+                        },
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          prefixIcon: Icon(Icons.phone_outlined),
+                          labelText: 'Customer phone number',
+                          hintText: '09XXXXXXXXX',
+                          helperText: 'Used by the rider to contact you.',
+                          suffixIcon: _profileLoading
+                              ? const Padding(
+                                  padding: EdgeInsets.all(14),
+                                  child: SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                )
+                              : null,
                         ),
-                        trailing: AppState.online && _paymentMethod == 'qrph'
-                            ? Icon(
-                                Icons.radio_button_checked,
-                                color: Theme.of(context).colorScheme.primary,
-                                size: 19,
-                              )
-                            : AppState.online
-                            ? Icon(
-                                Icons.radio_button_unchecked,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                                size: 19,
-                              )
-                            : Icon(
-                                Icons.lock_outline,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                                size: 18,
+                        validator: (value) =>
+                            _isValidPhone(value ?? '') ? null : 'Enter a valid Philippine mobile number (09XXXXXXXXX).',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 17),
+                  _sectionTitle('Payment Method'),
+                  _sectionCard(
+                    child: Column(
+                      children: [
+                        ListTile(
+                          dense: true,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          selected: _paymentMethod != 'qrph',
+                          selectedTileColor: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: .06),
+                          onTap: () => setState(
+                            () => _paymentMethod = _type == 'delivery'
+                                ? 'cod'
+                                : 'cash',
+                          ),
+                          leading: Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer,
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            child: Icon(
+                              _type == 'delivery'
+                                  ? Icons.local_shipping_rounded
+                                  : Icons.storefront_rounded,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
+                              size: 23,
+                            ),
+                          ),
+                          title: Text(
+                            _type == 'delivery'
+                                ? 'Cash on Delivery'
+                                : 'Cash at Pickup',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Text(
+                            _type == 'delivery'
+                                ? 'Pay the rider when your order arrives.'
+                                : 'Pay at the shop counter.',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          trailing: Icon(
+                            _paymentMethod == 'qrph'
+                                ? Icons.radio_button_unchecked
+                                : Icons.radio_button_checked,
+                            color: _paymentMethod == 'qrph'
+                                ? Theme.of(context).colorScheme.onSurfaceVariant
+                                : Theme.of(context).colorScheme.primary,
+                            size: 19,
+                          ),
+                        ),
+                        const Divider(height: 1, indent: 54),
+                        ListTile(
+                          dense: true,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          selected: _paymentMethod == 'qrph',
+                          selectedTileColor: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: .06),
+                          enabled: AppState.online,
+                          onTap: AppState.online
+                              ? () => setState(() => _paymentMethod = 'qrph')
+                              : null,
+                          leading: Container(
+                            width: 42,
+                            height: 42,
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Theme.of(context).dividerColor,
                               ),
+                            ),
+                            child: Image.asset(
+                              'assets/images/qrph.png',
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Icon(
+                                    Icons.qr_code_2_rounded,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
+                                  ),
+                            ),
+                          ),
+                          title: Text(
+                            'QRPh',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                          subtitle: Text(
+                            _qrCheckoutFailed
+                                ? 'Retry QRPh Setup'
+                                : AppState.online
+                                ? 'Scan and pay with any QRPh-enabled wallet or banking app.'
+                                : 'Unavailable until the shop configures online payment.',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          trailing: AppState.online && _paymentMethod == 'qrph'
+                              ? Icon(
+                                  Icons.radio_button_checked,
+                                  color: Theme.of(context).colorScheme.primary,
+                                  size: 19,
+                                )
+                              : AppState.online
+                              ? Icon(
+                                  Icons.radio_button_unchecked,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  size: 19,
+                                )
+                              : Icon(
+                                  Icons.lock_outline,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  size: 18,
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 17),
+                  _sectionTitle('Order Summary'),
+                  _sectionCard(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        children: [
+                          if (_quoting)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8),
+                              child: LinearProgressIndicator(minHeight: 2),
+                            ),
+                          if (quote == null && !_quoting)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Text(
+                                _error ??
+                                    (_type == 'delivery'
+                                        ? 'Select a delivery address to calculate the total.'
+                                        : 'Unable to calculate the order total.'),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: _error == null
+                                      ? Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant
+                                      : Colors.red,
+                                ),
+                              ),
+                            ),
+                          for (final item in items)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '${item['qty']} × ${item['name']}',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                  Text(
+                                    peso(dbl(item['line_total'])),
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (items.isNotEmpty) const Divider(height: 18),
+                          _row('Subtotal', peso(displayedSubtotal)),
+                          if (quote != null &&
+                              (quote.containsKey('promo_discount') ||
+                                  quote.containsKey('membership_discount')) &&
+                              dbl(quote['promo_discount']) +
+                                      dbl(quote['first_order_discount']) >
+                                  0)
+                            _row(
+                              'Promotion Discount',
+                              '-${peso(dbl(quote['promo_discount']) + dbl(quote['first_order_discount']))}',
+                              color: success,
+                            ),
+                          if (quote != null &&
+                              dbl(quote['membership_discount']) > 0)
+                            _row(
+                              'Member Discount${quote['membership_discount_percent'] == null ? '' : ' (${quote['membership_discount_percent']}%)'}',
+                              '-${peso(dbl(quote['membership_discount']))}',
+                              color: success,
+                            ),
+                          if (quote != null &&
+                              !quote.containsKey('promo_discount') &&
+                              dbl(quote['discount']) > 0)
+                            _row(
+                              'Discount${quote['discount_label'] == null ? '' : ' (${quote['discount_label']})'}',
+                              '-${peso(dbl(quote['discount']))}',
+                              color: success,
+                            ),
+                          if (_type == 'delivery')
+                            _row(
+                              'Delivery Fee',
+                              quote == null || needsDeliveryAddress
+                                  ? 'Select address to calculate'
+                                  : peso(dbl(quote['delivery_fee'])),
+                            ),
+                          const Divider(height: 20),
+                          _row('Total', totalLabel, bold: true),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: const EdgeInsets.only(bottom: 12),
+                    title: const Text(
+                      'Add a note or promo code',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    children: [
+                      TextField(
+                        controller: _notes,
+                        decoration: const InputDecoration(
+                          labelText: 'Order note (optional)',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.edit_note_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _promo,
+                              textCapitalization: TextCapitalization.characters,
+                              onChanged: (_) => setState(() {}),
+                              decoration: InputDecoration(
+                                labelText: 'Promo code',
+                                border: const OutlineInputBorder(),
+                                suffixIcon: _promo.text.isEmpty
+                                    ? null
+                                    : IconButton(
+                                        icon: const Icon(Icons.close),
+                                        onPressed: () {
+                                          _promo.clear();
+                                          SelectedPromo.I.clear();
+                                          setState(() {});
+                                          _refresh();
+                                        },
+                                      ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 9),
+                          OutlinedButton(
+                            onPressed: _quoting ? null : _refresh,
+                            child: const Text('Apply'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 17),
-                _sectionTitle('Order Summary'),
-                _sectionCard(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      children: [
-                        if (_quoting)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8),
-                            child: LinearProgressIndicator(minHeight: 2),
-                          ),
-                        if (quote == null && !_quoting)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Text(
-                              _error ??
-                                  (_type == 'delivery'
-                                      ? 'Select a delivery address to calculate the total.'
-                                      : 'Unable to calculate the order total.'),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: _error == null
-                                    ? Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant
-                                    : Colors.red,
-                              ),
-                            ),
-                          ),
-                        for (final item in items)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 3),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    '${item['qty']} × ${item['name']}',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                                Text(
-                                  peso(dbl(item['line_total'])),
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ],
-                            ),
-                          ),
-                        if (items.isNotEmpty) const Divider(height: 18),
-                        _row('Subtotal', peso(displayedSubtotal)),
-                        if (quote != null &&
-                            (quote.containsKey('promo_discount') ||
-                                quote.containsKey('membership_discount')) &&
-                            dbl(quote['promo_discount']) +
-                                    dbl(quote['first_order_discount']) >
-                                0)
-                          _row(
-                            'Promotion Discount',
-                            '-${peso(dbl(quote['promo_discount']) + dbl(quote['first_order_discount']))}',
-                            color: success,
-                          ),
-                        if (quote != null &&
-                            dbl(quote['membership_discount']) > 0)
-                          _row(
-                            'Member Discount${quote['membership_discount_percent'] == null ? '' : ' (${quote['membership_discount_percent']}%)'}',
-                            '-${peso(dbl(quote['membership_discount']))}',
-                            color: success,
-                          ),
-                        if (quote != null &&
-                            !quote.containsKey('promo_discount') &&
-                            dbl(quote['discount']) > 0)
-                          _row(
-                            'Discount${quote['discount_label'] == null ? '' : ' (${quote['discount_label']})'}',
-                            '-${peso(dbl(quote['discount']))}',
-                            color: success,
-                          ),
-                        if (_type == 'delivery')
-                          _row(
-                            'Delivery Fee',
-                            quote == null || needsDeliveryAddress
-                                ? 'Select address to calculate'
-                                : peso(dbl(quote['delivery_fee'])),
-                          ),
-                        const Divider(height: 20),
-                        _row('Total', totalLabel, bold: true),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ExpansionTile(
-                  tilePadding: EdgeInsets.zero,
-                  childrenPadding: const EdgeInsets.only(bottom: 12),
-                  title: const Text(
-                    'Add a note or promo code',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  children: [
-                    TextField(
-                      controller: _notes,
-                      decoration: const InputDecoration(
-                        labelText: 'Order note (optional)',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.edit_note_rounded),
+                  if (_error != null && quote != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _promo,
-                            textCapitalization: TextCapitalization.characters,
-                            onChanged: (_) => setState(() {}),
-                            decoration: InputDecoration(
-                              labelText: 'Promo code',
-                              border: const OutlineInputBorder(),
-                              suffixIcon: _promo.text.isEmpty
-                                  ? null
-                                  : IconButton(
-                                      icon: const Icon(Icons.close),
-                                      onPressed: () {
-                                        _promo.clear();
-                                        SelectedPromo.I.clear();
-                                        setState(() {});
-                                        _refresh();
-                                      },
-                                    ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 9),
-                        OutlinedButton(
-                          onPressed: _quoting ? null : _refresh,
-                          child: const Text('Apply'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                if (_error != null && quote != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      _error!,
-                      style: const TextStyle(color: Colors.red, fontSize: 12),
-                    ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
           SafeArea(

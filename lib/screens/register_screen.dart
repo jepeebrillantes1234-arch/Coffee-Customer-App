@@ -47,7 +47,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _name.text.trim(),
         _username.text.trim(),
         _email.text.trim(),
-        _phone.text.trim(),
+        _normalizedPhone(_phone.text),
         _password.text,
         _confirmPassword.text,
       );
@@ -63,6 +63,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  String _normalizedPhone(String value) {
+    final phone = value.replaceAll(RegExp(r'[\s()\-]'), '');
+    if (phone.startsWith('+63')) return '0${phone.substring(3)}';
+    if (phone.startsWith('63')) return '0${phone.substring(2)}';
+    return phone;
   }
 
   OutlineInputBorder _border(Color color) => OutlineInputBorder(
@@ -182,10 +189,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _phone,
                       keyboardType: TextInputType.phone,
                       textInputAction: TextInputAction.next,
-                      decoration: _dec(
-                        'Phone (optional)',
-                        Icons.phone_outlined,
-                      ),
+                      decoration: _dec('Phone number', Icons.phone_outlined),
+                      validator: (value) {
+                        final phone = _normalizedPhone(value ?? '');
+                        return RegExp(r'^09\d{9}$').hasMatch(phone)
+                            ? null
+                            : 'Enter a valid Philippine mobile number (09XXXXXXXXX).';
+                      },
                     ),
                     const SizedBox(height: 14),
                     TextFormField(

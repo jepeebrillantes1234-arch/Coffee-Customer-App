@@ -330,7 +330,6 @@ class Api {
         'username': username,
         'email': email,
         'phone': phone,
-        if (phone.isNotEmpty) 'phone': phone,
         'password': password,
         'password_confirmation': passwordConfirmation,
         'device_name': 'customer-app',
@@ -402,6 +401,13 @@ class Api {
       order['payment_attempt_status'] = paymentAttemptStatus;
       order['checkout_url'] = checkoutUrl;
     }
+    final contactPhone = payload['contact_phone']?.toString();
+    if (contactPhone != null && user != null) {
+      user = {...user!, 'phone': contactPhone};
+      order['customer_phone'] = contactPhone;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_phone', contactPhone);
+    }
     return order;
   }
 
@@ -410,6 +416,22 @@ class Api {
 
   Future<Map<String, dynamic>> order(int id) async =>
       Map<String, dynamic>.from(_d(await _call('GET', '/orders/$id')) as Map);
+
+  /// Refreshes the signed-in profile from Laravel and persists the current
+  /// phone value, so checkout does not rely only on a potentially stale cache.
+  Future<Map<String, dynamic>> refreshProfile() async {
+    final remote = Map<String, dynamic>.from(
+      _d(await _call('GET', '/profile')) as Map,
+    );
+    final updated = <String, dynamic>{...?user, ...remote};
+    if (updated['avatar_url'] != null) {
+      updated['avatar_url'] = _resolveAvatarUrl(updated['avatar_url']);
+    }
+    user = updated;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_phone', updated['phone']?.toString() ?? '');
+    return updated;
+  }
 
   Future<Map<String, dynamic>> tracking(int id) async =>
       Map<String, dynamic>.from(
