@@ -15,6 +15,7 @@ class LocationService {
   Position? _last;
   final Set<int> _deliveryIds = {};
   bool _sending = false;
+  bool _refreshing = false;
   bool _starting = false;
   bool _streamHasFix = false;
   int _generation = 0;
@@ -139,8 +140,7 @@ class LocationService {
         (p) {
           final firstFix = !_streamHasFix;
           _streamHasFix = true;
-          _last = p;
-          position.value = p;
+          _setPositionIfNewer(p);
           if (firstFix) unawaited(_send());
         },
         onError: (Object e) {
@@ -173,11 +173,45 @@ class LocationService {
       if (generation != _generation || _deliveryIds.isEmpty) return false;
       // Keep the update cadence below the per-rider API throttle while still
       // refreshing customer tracking frequently.
-      _timer = Timer.periodic(const Duration(seconds: 8), (_) => _send());
+      _timer = Timer.periodic(
+        const Duration(seconds: 8),
+        (_) => _refreshAndSend(),
+      );
       await _send();
       return _last != null;
     } finally {
       _starting = false;
+    }
+  }
+
+  void _setPositionIfNewer(Position next) {
+    final current = _last;
+    if (current == null || !next.timestamp.isBefore(current.timestamp)) {
+      _last = next;
+      position.value = next;
+    }
+  }
+
+  Future<void> _refreshAndSend() async {
+    if (_refreshing || _sending || _deliveryIds.isEmpty) return;
+    final generation = _generation;
+    _refreshing = true;
+    try {
+      final fresh = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 6),
+        ),
+      );
+      if (generation != _generation || _deliveryIds.isEmpty) return;
+      _setPositionIfNewer(fresh);
+      await _send();
+    } catch (_) {
+      if (generation != _generation) return;
+      tracking.value = false;
+      error.value = 'Could not refresh the current GPS location.';
+    } finally {
+      if (generation == _generation) _refreshing = false;
     }
   }
 
@@ -231,6 +265,7 @@ class LocationService {
     _timer?.cancel();
     _timer = null;
     _last = null;
+    _refreshing = false;
     _streamHasFix = false;
     _deliveryIds.clear();
     _sending = false;

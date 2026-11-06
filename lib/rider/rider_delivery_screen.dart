@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
+import '../core/shop_map_marker.dart';
 import '../core/util.dart';
 import '../core/widgets.dart' show fixUrl;
 import '../screens/rider_chat_screen.dart';
@@ -762,17 +763,7 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
                   ),
                 MarkerLayer(
                   markers: [
-                    if (shop != null)
-                      Marker(
-                        point: shop,
-                        width: 42,
-                        height: 46,
-                        child: const Icon(
-                          Icons.store_rounded,
-                          color: Color(0xFF455A64),
-                          size: 32,
-                        ),
-                      ),
+                    if (shop != null) kjmShopMarker(point: shop),
                     Marker(
                       point: destination,
                       width: 58,

@@ -1,0 +1,31 @@
+%% Customer service conversation, based on the current app chat and Laravel support assistant.
+flowchart TD
+  START([Open Customer Service]) --> AUTH{Signed in as customer?}
+  AUTH -- Yes --> LOAD[Load own conversation and available order context]
+  AUTH -- No --> GUEST[/Enter guest contact details or resume with saved guest UUID/token/]
+  GUEST --> START_GUEST[Start or resume guest conversation]
+  LOAD --> SEND[/Send message; optional image and related order/]
+  START_GUEST --> SEND
+  SEND --> VALIDATE[Laravel validates and stores the customer message]
+  VALIDATE --> RULES[Local SupportAssistant checks message text with existing rules]
+  RULES --> REPLY[Return assistant response for matched concern or general help]
+  REPLY --> HUMAN{Concern needs human review or customer asks for help?}
+  HUMAN -- No --> HISTORY[Refresh conversation messages and preserve history]
+  HUMAN -- Yes --> NOTIFY[Set conversation for Admin review and create Admin notification]
+  NOTIFY --> WAIT[Show assistant reply directing customer to provide relevant details and wait for Admin review]
+  WAIT --> HISTORY
+  HISTORY --> MORE{Send another message?}
+  MORE -- Yes --> SEND
+  MORE -- No --> CLOSED{Conversation closed?}
+  CLOSED -- No --> RETURN[Return to Home/Profile; conversation remains available]
+  CLOSED -- Yes --> NEW{Start another conversation?}
+  NEW -- Yes --> AUTH
+  NEW -- No --> RETURN
+  RETURN --> END([End Customer Service flow])
+
+  classDef customer fill:#f5eadb,stroke:#765039,color:#2d211b,stroke-width:2px;
+  classDef backend fill:#e6eeeb,stroke:#2d676a,color:#1e3432,stroke-width:2px;
+  classDef decision fill:#fff3d9,stroke:#b58a55,color:#30291f,stroke-width:2px;
+  class START,END customer;
+  class AUTH,HUMAN,MORE,CLOSED,NEW decision;
+  class LOAD,START_GUEST,VALIDATE,RULES,REPLY,NOTIFY backend;

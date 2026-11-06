@@ -1,0 +1,56 @@
+%% Main end-to-end customer journey, verified against Flutter customer app and Laravel API.
+flowchart TD
+  START([Open Mobile App]) --> INIT[Initialize Firebase, API session, theme and app services]
+  INIT --> SPLASH[Show Splash Screen and restore session]
+  SPLASH --> SESSION{Authenticated customer session?}
+  SESSION -- Yes --> HOME[Open Customer Home]
+  SESSION -- No --> ENTRY[Login or Register]
+  ENTRY --> CHOICE{Choose Login or Register}
+  CHOICE -- Login --> LOGIN[/Enter email, username or phone and password; Google sign-in also available/]
+  CHOICE -- Register --> REGISTER[/Enter name, username, email, phone, password and confirmation/]
+  LOGIN --> LOGIN_OK{Laravel authenticates?}
+  REGISTER --> REG_OK{Laravel accepts registration?}
+  LOGIN_OK -- No --> AUTH_ERROR[Show error; retry or use Forgot Password]
+  REG_OK -- No --> AUTH_ERROR
+  AUTH_ERROR --> ENTRY
+  LOGIN_OK -- Yes --> HOME
+  REG_OK -- Yes --> HOME
+
+  HOME --> HOME_DATA[Load categories, products, banners, app configuration and shop hours]
+  HOME_DATA --> LOAD_OK{Home data loaded?}
+  LOAD_OK -- No --> LOAD_ERROR[Show available error/empty state; retry or continue where possible]
+  LOAD_ERROR --> HOME
+  LOAD_OK -- Yes --> DEST{Choose customer destination}
+
+  DEST -- Shop --> SHOP[Browse categories, search, promos, discounted products and best sellers]
+  SHOP --> PRODUCT[Open product details; choose supported product options]
+  PRODUCT --> CART_ADD{Add to cart?}
+  CART_ADD -- No --> SHOP
+  CART_ADD -- Yes --> CART[Review cart; update quantity, remove item or continue shopping]
+  CART --> CART_NEXT{Continue shopping or checkout?}
+  CART_NEXT -- Continue --> SHOP
+  CART_NEXT -- Checkout --> CHECKOUT[Select Delivery or Pickup, address and payment method]
+  CHECKOUT --> ORDER_FLOW[Follow Checkout and Payment Flowchart]
+  ORDER_FLOW --> ORDER_CREATED{Order created?}
+  ORDER_CREATED -- No --> CHECKOUT
+  ORDER_CREATED -- Yes --> MY_ORDERS[Open My Orders and order confirmation/status]
+  MY_ORDERS --> TRACK[Follow Order Tracking and Cancellation Flowchart]
+  TRACK --> ORDER_DONE([Order delivered or picked up; remains in order history])
+  ORDER_DONE --> DEST
+
+  DEST -- Membership and rewards --> MEMBER[Follow Membership and Rewards Flowchart]
+  MEMBER --> DEST
+  DEST -- Customer Service --> SUPPORT[Follow Customer Service Flowchart]
+  SUPPORT --> DEST
+  DEST -- Profile and settings --> PROFILE[View profile and account settings]
+  PROFILE --> LOGOUT{Choose and confirm Logout?}
+  LOGOUT -- No --> DEST
+  LOGOUT -- Yes --> CLEAR[Call Laravel logout and clear local session]
+  CLEAR --> END([Return to Login / Get Started])
+
+  classDef customer fill:#f5eadb,stroke:#765039,color:#2d211b,stroke-width:2px;
+  classDef backend fill:#e6eeeb,stroke:#2d676a,color:#1e3432,stroke-width:2px;
+  classDef decision fill:#fff3d9,stroke:#b58a55,color:#30291f,stroke-width:2px;
+  class START,END,ORDER_DONE customer;
+  class SESSION,CHOICE,LOGIN_OK,REG_OK,LOAD_OK,DEST,CART_ADD,CART_NEXT,ORDER_CREATED,LOGOUT decision;
+  class INIT,LOGIN,REGISTER,HOME_DATA,AUTH_ERROR,LOAD_ERROR,ORDER_FLOW,CLEAR backend;

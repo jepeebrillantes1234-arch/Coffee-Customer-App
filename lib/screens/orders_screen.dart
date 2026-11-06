@@ -24,6 +24,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
   bool _loading = true;
   String? _error;
   StreamSubscription<Map<String, dynamic>>? _liveSubscription;
+  Timer? _ordersRefreshTimer;
+  bool _refreshingOrders = false;
   String _filter = 'All';
   int? _payingOrderId;
 
@@ -39,6 +41,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
         _load(silent: true);
       }
     });
+    _ordersRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && rootTab.value == 3) _load(silent: true);
+    });
   }
 
   void _onTab() {
@@ -49,10 +54,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
   void dispose() {
     rootTab.removeListener(_onTab);
     _liveSubscription?.cancel();
+    _ordersRefreshTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _load({bool silent = false}) async {
+    if (_refreshingOrders) return;
+    _refreshingOrders = true;
     if (!silent && mounted) setState(() => _loading = true);
     try {
       final orders = await Api.I.orders();
@@ -68,6 +76,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
         _error = e.message;
         _loading = false;
       });
+    } finally {
+      _refreshingOrders = false;
     }
   }
 

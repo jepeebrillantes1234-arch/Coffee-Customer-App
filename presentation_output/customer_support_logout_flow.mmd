@@ -1,0 +1,42 @@
+%% Customer support chat, rule-based assistant, persisted conversation and staff/admin escalation.
+flowchart TD
+  START([Open Customer Service]) --> AUTH{Authenticated customer?}
+  AUTH -- Yes --> EXISTING[Load own support conversation and related order context]
+  AUTH -- No --> GUEST[/Enter guest name/contact or resume with saved guest token/]
+  GUEST --> GUEST_CHAT[Load or start guest conversation]
+  EXISTING --> COMPOSE
+  GUEST_CHAT --> COMPOSE
+  COMPOSE[/Send message; optionally attach image and authenticated related order/]
+  COMPOSE --> SAVED[Laravel validates and persists customer message]
+  SAVED --> ASSIST[Rule-based assistant evaluates available message/conversation context]
+  ASSIST --> REPLY{Assistant can provide relevant response?}
+  REPLY -- Yes --> RESPONSE[Show assistant reply; continue conversation]
+  REPLY -- No / human help requested --> ASK[Ask clarifying question or offer staff/admin assistance]
+  ASK --> CHOICE{Wait for assistance or contact Admin directly?}
+  CHOICE -- Wait --> HANDOFF[Create/retain support handoff and Admin notification where implemented]
+  CHOICE -- Contact directly --> CONTACT[Show configured customer-service contact details]
+  HANDOFF --> STATUS[Conversation remains in history; messages can refresh while waiting]
+  CONTACT --> STATUS
+  RESPONSE --> MORE{Send another message?}
+  STATUS --> MORE
+  MORE -- Yes --> COMPOSE
+  MORE -- No --> CLOSED{Conversation closed?}
+  CLOSED -- No --> RETURN[Return to Home/Profile; conversation history retained]
+  CLOSED -- Yes --> NEW{Need another conversation?}
+  NEW -- Yes --> GUEST_OR_AUTH[Start new customer/guest conversation]
+  GUEST_OR_AUTH --> AUTH
+  NEW -- No --> RETURN
+  RETURN --> PROFILE[Profile and account settings]
+  PROFILE --> LOGOUT{Choose Logout?}
+  LOGOUT -- No --> HOME([Return to app session])
+  LOGOUT -- Yes --> CONFIRM{Confirm logout?}
+  CONFIRM -- No --> PROFILE
+  CONFIRM -- Yes --> CLEAR[Call Laravel logout and clear local session]
+  CLEAR --> END([Return to Login / Get Started])
+
+  classDef customer fill:#f5eadb,stroke:#765039,color:#2d211b,stroke-width:2px;
+  classDef backend fill:#e6eeeb,stroke:#2d676a,color:#1e3432,stroke-width:2px;
+  classDef decision fill:#fff3d9,stroke:#b58a55,color:#30291f,stroke-width:2px;
+  class START,HOME,END customer;
+  class AUTH,REPLY,CHOICE,MORE,CLOSED,NEW,LOGOUT,CONFIRM decision;
+  class EXISTING,GUEST_CHAT,SAVED,ASSIST,HANDOFF,CLEAR backend;

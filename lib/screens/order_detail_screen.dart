@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
 import '../core/realtime.dart';
+import '../core/shop_map_marker.dart';
 import '../core/theme.dart';
 import '../core/util.dart';
 import '../core/widgets.dart';
@@ -161,7 +162,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _cancel() async {
-    if (_busy || _o?['status'] != 'pending' || _o?['can_cancel'] != true) {
+    if (_busy ||
+        !const {'awaiting_payment', 'pending'}.contains(_o?['status']) ||
+        _o?['can_cancel'] != true) {
       return;
     }
     final reasonController = TextEditingController();
@@ -467,6 +470,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final status = '${o['status']}';
     final type = '${o['order_type']}';
     final isDelivery = type == 'delivery';
+    final isPickup = type == 'pickup';
     final rider = t['rider'] is Map
         ? Map<String, dynamic>.from(t['rider'] as Map)
         : null;
@@ -521,10 +525,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final points = <LatLng>[...routePoints, ?destinationPoint, ?riderPoint];
     final isCancelled = status == 'cancelled' || status == 'rejected';
     final isDelivered = status == 'delivered' || status == 'completed';
+    final pickupReady =
+        isPickup && (status == 'ready' || status == 'completed');
     final isTerminal = _isFinalStatus(status);
     final isOnRoute = _isActiveDeliveryStatus(status);
     final currentStep = isCancelled
         ? -1
+        : pickupReady
+        ? 3
         : isDelivered
         ? 3
         : isOnRoute || status == 'ready' || status == 'rider_assigned'
@@ -546,6 +554,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             destinationPoint: destinationPoint,
             shopPoint: shopPoint,
             riderPoint: riderPoint,
+            riderAvatarUrl: rider?['avatar_url']?.toString(),
             routePoints: routePoints,
             mapPoints: points,
             address: address,
@@ -810,6 +819,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                         ? 'Your order has been cancelled'
                                         : status == 'rejected'
                                         ? 'Your order was rejected'
+                                        : isPickup && status == 'ready'
+                                        ? 'Your order is ready for pickup!'
+                                        : isPickup && status == 'completed'
+                                        ? 'Your pickup order is complete'
                                         : isDelivered
                                         ? 'Your order has been delivered!'
                                         : isOnRoute
@@ -843,12 +856,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             for (var step = 0; step < 4; step++) ...[
                               Expanded(
                                 child: _trackingStep(
-                                  const [
-                                    'Confirmed',
-                                    'Preparing',
-                                    'Ready',
-                                    'Delivered',
-                                  ][step],
+                                  (isPickup
+                                          ? const [
+                                              'Confirmed',
+                                              'Preparing',
+                                              'Ready',
+                                              'Ready for Pickup',
+                                            ]
+                                          : const [
+                                              'Confirmed',
+                                              'Preparing',
+                                              'Ready',
+                                              'Delivered',
+                                            ])[step],
                                   step,
                                   currentStep,
                                   isCurrent:
@@ -882,8 +902,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Delivery Updates',
+                        Text(
+                          isPickup ? 'Pickup Updates' : 'Delivery Updates',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -967,7 +987,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     icon: const Icon(Icons.qr_code_2_rounded),
                     label: Text('Pay with QRPh  |  ${peso(dbl(o['total']))}'),
                   ),
-                if (status == 'pending' && o['can_cancel'] == true)
+                if (o['can_cancel'] == true &&
+                    const {'awaiting_payment', 'pending'}.contains(status))
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size.fromHeight(48),
@@ -981,6 +1002,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           )
                         : const Icon(Icons.cancel_outlined),
                     label: Text(_busy ? 'Cancelling…' : 'Cancel order'),
+                  ),
+                if (o['cancellation_requires_staff'] == true)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Text(
+                        'This QRPh payment is already confirmed. Contact Customer Service to request cancellation and any applicable refund.',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
                   ),
                 if ((status == 'delivered' || status == 'completed') &&
                     o['has_review'] != true)
@@ -1039,6 +1072,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     required LatLng? destinationPoint,
     required LatLng? shopPoint,
     required LatLng? riderPoint,
+    required String? riderAvatarUrl,
     required List<LatLng> routePoints,
     required List<LatLng> mapPoints,
     required String address,
@@ -1090,23 +1124,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ),
         MarkerLayer(
           markers: [
-            if (shopPoint != null)
-              Marker(
-                point: shopPoint,
-                width: 42,
-                height: 48,
-                child: _mapPin(
-                  Icons.storefront_rounded,
-                  Theme.of(context).colorScheme.primary,
-                ),
-              ),
+            if (shopPoint != null) kjmShopMarker(point: shopPoint),
             Marker(
               point: destinationPoint,
-              width: 42,
-              height: 48,
-              child: _mapPin(
-                Icons.home_rounded,
-                Theme.of(context).colorScheme.primary,
+              width: 56,
+              height: 64,
+              child: _customerProfileMapMarker(
+                context,
+                Api.I.user?['avatar_url']?.toString(),
               ),
             ),
             if (!isTerminal && riderPoint != null)
@@ -1114,7 +1139,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 point: riderPoint,
                 width: 76,
                 height: 60,
-                child: _deliveryMapMarker(context),
+                child: _deliveryMapMarker(
+                  context,
+                  riderAvatarUrl,
+                ),
               ),
           ],
         ),
@@ -1185,7 +1213,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       case 'delivered':
         return 'Delivered';
       case 'completed':
-        return 'Completed';
+        return type == 'pickup' ? 'Pickup completed' : 'Completed';
       case 'rejected':
         return 'Rejected by shop';
       case 'cancelled':
@@ -1346,18 +1374,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     ),
   );
 
-  Widget _mapPin(IconData icon, Color color) => Container(
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      shape: BoxShape.circle,
-      border: Border.all(color: color, width: 2),
-      boxShadow: [
-        BoxShadow(color: Theme.of(context).colorScheme.shadow, blurRadius: 5),
-      ],
-    ),
-    child: Icon(icon, color: color, size: 25),
-  );
-
   Widget _mapPlaceholder(String address) => Container(
     color: Theme.of(context).dividerColor,
     alignment: Alignment.center,
@@ -1491,26 +1507,91 @@ Widget _routeMapBadge(
   ),
 );
 
-Widget _deliveryMapMarker(BuildContext context) => Container(
-  padding: const EdgeInsets.all(3),
-  decoration: BoxDecoration(
-    color: Theme.of(context).colorScheme.surface.withValues(alpha: .94),
-    borderRadius: BorderRadius.circular(16),
-    border: Border.all(color: Theme.of(context).colorScheme.primary, width: 2),
-    boxShadow: [
-      BoxShadow(
-        color: Theme.of(context).colorScheme.shadow.withValues(alpha: .24),
-        blurRadius: 7,
-        offset: const Offset(0, 2),
-      ),
-    ],
-  ),
-  child: Image.asset(
-    'assets/images/delivery.png',
-    fit: BoxFit.contain,
-    errorBuilder: (context, error, stackTrace) => Icon(
-      Icons.delivery_dining_rounded,
-      color: Theme.of(context).colorScheme.primary,
+Widget _customerProfileMapMarker(BuildContext context, String? imageUrl) {
+  final colors = Theme.of(context).colorScheme;
+  final url = fixUrl(imageUrl);
+  Widget fallback() =>
+      Icon(Icons.person_rounded, color: colors.onSurfaceVariant, size: 25);
+
+  return SizedBox(
+    width: 56,
+    height: 64,
+    child: Stack(
+      alignment: Alignment.topCenter,
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          bottom: -1,
+          child: Icon(Icons.location_on_rounded, size: 60, color: colors.error),
+        ),
+        Container(
+          width: 42,
+          height: 42,
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            shape: BoxShape.circle,
+            border: Border.all(color: colors.surface, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: colors.shadow.withValues(alpha: .3),
+                blurRadius: 5,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ClipOval(
+            child: url.isEmpty
+                ? ColoredBox(
+                    color: colors.surfaceContainerHighest,
+                    child: fallback(),
+                  )
+                : Image.network(
+                    url,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => ColoredBox(
+                      color: colors.surfaceContainerHighest,
+                      child: fallback(),
+                    ),
+                  ),
+          ),
+        ),
+      ],
     ),
-  ),
-);
+  );
+}
+
+Widget _deliveryMapMarker(BuildContext context, String? imageUrl) {
+  final colors = Theme.of(context).colorScheme;
+  final url = fixUrl(imageUrl);
+  Widget fallback() => ColoredBox(
+    color: colors.surfaceContainerHighest,
+    child: Icon(Icons.delivery_dining_rounded, color: colors.primary),
+  );
+
+  return Container(
+    padding: const EdgeInsets.all(3),
+    decoration: BoxDecoration(
+      color: colors.surface.withValues(alpha: .94),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: colors.primary, width: 2),
+      boxShadow: [
+        BoxShadow(
+          color: colors.shadow.withValues(alpha: .24),
+          blurRadius: 7,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: url.isEmpty
+          ? fallback()
+          : Image.network(
+              url,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => fallback(),
+            ),
+    ),
+  );
+}

@@ -137,7 +137,6 @@ class _QrphPaymentScreenState extends State<QrphPaymentScreen>
     final remaining = next.isNegative ? Duration.zero : next;
     if (remaining == Duration.zero && _phase == _PaymentPhase.pending) {
       _phase = _PaymentPhase.expired;
-      _pollTimer?.cancel();
     }
     if (setStateAfter && mounted) setState(() => _remaining = remaining);
     _remaining = remaining;
@@ -196,7 +195,9 @@ class _QrphPaymentScreenState extends State<QrphPaymentScreen>
 
   void _startPolling() {
     _pollTimer?.cancel();
-    if (_phase == _PaymentPhase.pending && !_hasExpired) {
+    // Keep checking after the local QR timer reaches zero. Laravel remains
+    // authoritative and may receive a valid payment webhook at the deadline.
+    if (_phase == _PaymentPhase.pending || _phase == _PaymentPhase.expired) {
       _pollTimer = Timer.periodic(
         const Duration(seconds: 5),
         (_) => _checkStatus(),

@@ -36,6 +36,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _quoting = false;
   bool _placing = false;
   bool _addressChosenByCustomer = false;
+  bool _qrCheckoutFailed = false;
   int _quoteSeq = 0;
   String? _checkoutRequestId;
 
@@ -194,19 +195,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final order = await Api.I.placeOrder(payload);
 
       _checkoutRequestId = null;
+      _qrCheckoutFailed = false;
       Cart.I.clear();
       SelectedPromo.I.clear();
       rootTab.value = 3;
+      final opensQrPayment =
+          order['payment_method'] == 'qrph' &&
+          order['status'] == 'awaiting_payment' &&
+          '${order['payment_status']}'.toLowerCase() != 'paid';
       nav.pushReplacement(
         MaterialPageRoute(
-          builder: (_) => order['status'] == 'awaiting_payment'
+          builder: (_) => opensQrPayment
               ? PaymentScreen(order: order)
               : TrackOrderScreen(orderId: order['id'] as int),
         ),
       );
     } on ApiException catch (e) {
       if (mounted) {
-        setState(() => _error = e.message);
+        setState(() {
+          _error = e.message;
+          _qrCheckoutFailed = _paymentMethod == 'qrph';
+        });
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.message)));
       }
@@ -498,7 +507,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           ),
                         ),
                         subtitle: Text(
-                          AppState.online
+                          _qrCheckoutFailed
+                              ? 'Retry QRPh Setup'
+                              : AppState.online
                               ? 'Scan and pay with any QRPh-enabled wallet or banking app.'
                               : 'Unavailable until the shop configures online payment.',
                           style: const TextStyle(fontSize: 11),
@@ -710,13 +721,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           ),
                         )
                       : Text(
-                          AppState.online
-                              ? (quote == null
-                                    ? 'Continue to Payment'
-                                    : 'Continue to Payment · ${peso(dbl(quote['total']))}')
-                              : (quote == null
-                                    ? 'Place Order'
-                                    : 'Place Order · ${peso(dbl(quote['total']))}'),
+                          quote == null
+                              ? 'Place Order'
+                              : 'Place Order · ${peso(dbl(quote['total']))}',
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                 ),

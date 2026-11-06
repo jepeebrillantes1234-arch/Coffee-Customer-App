@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
+import '../core/shop_map_marker.dart';
 import '../core/theme.dart';
 import '../core/widgets.dart';
 import '../state/cart.dart';
@@ -584,15 +588,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _openHelp() => showCustomerServiceSheet(context);
 
   void _openAbout() {
-    showAboutDialog(
+    showDialog<void>(
       context: context,
-      applicationName: 'KJM Coffee Shop',
-      applicationIcon: Icon(
-        Icons.coffee_rounded,
-        color: Theme.of(context).colorScheme.primary,
-        size: 36,
-      ),
-      applicationLegalese: 'Customer app',
+      builder: (_) => const _CustomerAboutDialog(),
     );
   }
 
@@ -769,6 +767,366 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CustomerAboutDialog extends StatefulWidget {
+  const _CustomerAboutDialog();
+
+  @override
+  State<_CustomerAboutDialog> createState() => _CustomerAboutDialogState();
+}
+
+class _CustomerAboutDialogState extends State<_CustomerAboutDialog> {
+  static const _shopAddress =
+      'Labit Proper, Zone 4, Urdaneta City, Pangasinan 2428';
+
+  Map<String, dynamic> _settings = {};
+  Map<String, dynamic> _contact = {};
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPublicDetails();
+  }
+
+  Future<void> _loadPublicDetails() async {
+    final results = await Future.wait<Object?>([
+      Api.I.appConfig().catchError((_) => <String, dynamic>{}),
+      Api.I.supportContact().catchError((_) => <String, dynamic>{}),
+    ]);
+    if (!mounted) return;
+    final config = results[0] is Map
+        ? Map<String, dynamic>.from(results[0] as Map)
+        : <String, dynamic>{};
+    final contact = results[1] is Map
+        ? Map<String, dynamic>.from(results[1] as Map)
+        : <String, dynamic>{};
+    final settings = config['settings'];
+    setState(() {
+      _settings = settings is Map
+          ? Map<String, dynamic>.from(settings)
+          : <String, dynamic>{};
+      _contact = contact;
+      _loading = false;
+    });
+  }
+
+  double? _coordinate(String key) {
+    final value = _settings[key];
+    final parsed = value is num ? value.toDouble() : double.tryParse('$value');
+    return parsed != null && parsed.isFinite ? parsed : null;
+  }
+
+  Future<void> _openMap(double? latitude, double? longitude) async {
+    if (latitude == null ||
+        longitude == null ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      return;
+    }
+    final uri = Uri.https('www.google.com', '/maps/dir/', {
+      'api': '1',
+      'destination': '$latitude,$longitude',
+    });
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _launchContact(Uri uri) async {
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
+        mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open that contact app.')),
+      );
+    }
+  }
+
+  Widget _sectionTitle(BuildContext context, String text) => Padding(
+    padding: const EdgeInsets.only(top: 20, bottom: 8),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+        fontWeight: FontWeight.w800,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+    ),
+  );
+
+  Widget _detailRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 19, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.labelMedium),
+              const SizedBox(height: 2),
+              SelectableText(
+                value,
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final hours = _settings['shop_operating_hours'];
+    final hoursMap = hours is Map ? Map<String, dynamic>.from(hours) : {};
+    final deliveryBase = _settings['delivery_base_fee'];
+    final deliveryPerKm = _settings['delivery_fee_per_km'];
+    final deliveryRadius = _settings['delivery_radius_km'];
+    final lat = _coordinate('shop_lat');
+    final lng = _coordinate('shop_lng');
+    final hasCoordinates =
+        lat != null &&
+        lng != null &&
+        lat >= -90 &&
+        lat <= 90 &&
+        lng >= -180 &&
+        lng <= 180;
+    final phone = (_contact['phone'] ?? '').toString().trim();
+    final email = (_contact['email'] ?? '').toString().trim();
+    final whatsapp = (_contact['whatsapp'] ?? '').toString().trim();
+    final isOpen = hoursMap['is_open'] == true;
+
+    return AlertDialog(
+      scrollable: true,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+      titlePadding: const EdgeInsets.fromLTRB(24, 20, 12, 0),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'About KJM Coffee Shop',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: colors.onSurface,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Close',
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: MediaQuery.sizeOf(context).width > 520
+            ? 460
+            : MediaQuery.sizeOf(context).width - 84,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Image.asset(
+                'assets/images/logo1.png',
+                width: 116,
+                height: 116,
+                fit: BoxFit.contain,
+                errorBuilder: (_, _, _) =>
+                    Icon(Icons.coffee_rounded, size: 64, color: colors.primary),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Center(
+              child: Text(
+                'KJM Coffee Shop',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: colors.onSurface,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Center(
+              child: Text(
+                'Good Coffee, Good Mood',
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: colors.onSurfaceVariant),
+              ),
+            ),
+            _sectionTitle(context, 'SHOP LOCATION'),
+            _detailRow(
+              context,
+              Icons.location_on_outlined,
+              'Address',
+              _shopAddress,
+            ),
+            if (hasCoordinates) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(
+                  height: 170,
+                  child: FlutterMap(
+                    options: MapOptions(
+                      initialCenter: LatLng(lat, lng),
+                      initialZoom: 15,
+                      interactionOptions: const InteractionOptions(
+                        flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                      ),
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.kjmcoffeeshop.customer',
+                      ),
+                      MarkerLayer(
+                        markers: [kjmShopMarker(point: LatLng(lat, lng))],
+                      ),
+                      RichAttributionWidget(
+                        attributions: [
+                          TextSourceAttribution(
+                            'OpenStreetMap contributors',
+                            onTap: () => _launchContact(
+                              Uri.https('www.openstreetmap.org', '/copyright'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => _openMap(lat, lng),
+                  icon: const Icon(Icons.directions_outlined),
+                  label: const Text('Open directions'),
+                ),
+              ),
+            ],
+            _sectionTitle(context, 'OPERATING HOURS'),
+            if (_loading)
+              const LinearProgressIndicator()
+            else if (hoursMap.isEmpty)
+              Text(
+                'Shop hours are temporarily unavailable.',
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: colors.onSurfaceVariant),
+              )
+            else ...[
+              Row(
+                children: [
+                  Icon(
+                    isOpen ? Icons.check_circle : Icons.cancel,
+                    color: isOpen ? Colors.green : colors.error,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    isOpen ? 'Open' : 'Closed',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: isOpen ? Colors.green : colors.error,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              _detailRow(
+                context,
+                Icons.schedule_outlined,
+                'Hours (${hoursMap['timezone'] ?? 'Asia/Manila'})',
+                '${hoursMap['opening_time'] ?? '—'} – ${hoursMap['closing_time'] ?? '—'}',
+              ),
+              Text(
+                'New customer app orders are accepted only during shop operating hours. Existing orders continue processing after closing.',
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: colors.onSurfaceVariant),
+              ),
+            ],
+            _sectionTitle(context, 'DELIVERY INFORMATION'),
+            if (_loading)
+              const LinearProgressIndicator()
+            else if (deliveryBase == null ||
+                deliveryPerKm == null ||
+                deliveryRadius == null)
+              Text(
+                'Delivery information is temporarily unavailable.',
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: colors.onSurfaceVariant),
+              )
+            else ...[
+              _detailRow(
+                context,
+                Icons.payments_outlined,
+                'Base delivery fee',
+                '₱${deliveryBase.toString()}',
+              ),
+              _detailRow(
+                context,
+                Icons.add_road_outlined,
+                'Additional fee per kilometer',
+                '₱${deliveryPerKm.toString()}',
+              ),
+              _detailRow(
+                context,
+                Icons.radar_outlined,
+                'Maximum delivery radius',
+                '${deliveryRadius.toString()} km',
+              ),
+            ],
+            if (phone.isNotEmpty ||
+                email.isNotEmpty ||
+                whatsapp.isNotEmpty) ...[
+              _sectionTitle(context, 'CONTACT US'),
+              if (phone.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () =>
+                      _launchContact(Uri(scheme: 'tel', path: phone)),
+                  icon: const Icon(Icons.call_outlined),
+                  label: Text(phone),
+                ),
+              if (email.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () =>
+                      _launchContact(Uri(scheme: 'mailto', path: email)),
+                  icon: const Icon(Icons.email_outlined),
+                  label: Text(email),
+                ),
+              if (whatsapp.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () {
+                    final digits = whatsapp.replaceAll(RegExp(r'[^0-9]'), '');
+                    _launchContact(Uri.https('wa.me', '/$digits'));
+                  },
+                  icon: const Icon(Icons.chat_outlined),
+                  label: Text('WhatsApp: $whatsapp'),
+                ),
+            ],
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
     );
   }
 }

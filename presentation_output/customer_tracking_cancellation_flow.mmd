@@ -1,0 +1,57 @@
+%% My Orders, distinct payment/fulfillment states, delivery/pickup tracking and cancellation.
+flowchart TD
+  START([Open My Orders]) --> LOAD[Laravel lists the authenticated customer's non-archived orders]
+  LOAD --> SELECT{Select an order?}
+  SELECT -- No --> HISTORY[Review customer order history]
+  SELECT -- Yes --> PAYMENT{Payment state?}
+  PAYMENT -- QRPh unpaid, failed or expired --> PAY_NOW[Pay Now uses existing order/payment flow]
+  PAY_NOW --> PAYMENT
+  PAYMENT -- Paid or cash-on-collection path --> FULFILL{Pickup or Delivery?}
+
+  FULFILL -- Pickup --> PICKUP[Show pickup status timeline and configured shop location]
+  PICKUP --> P_STATUS{Current shared order status}
+  P_STATUS -- pending --> P_PENDING[Pending / awaiting processing]
+  P_STATUS -- confirmed --> P_CONF[Confirmed]
+  P_STATUS -- preparing --> P_PREP[Preparing]
+  P_STATUS -- ready --> P_READY[Ready for pickup]
+  P_STATUS -- completed --> P_DONE([Pickup completed; retain in history])
+  P_PENDING --> CANCEL_CHECK
+  P_CONF --> CANCEL_CHECK
+  P_PREP --> CANCEL_CHECK
+  P_READY --> CANCEL_CHECK
+
+  FULFILL -- Delivery --> DELIVERY[Show customer destination, delivery status and rider details when assigned]
+  DELIVERY --> MAP{Active assigned rider and fresh location?}
+  MAP -- Yes --> LIVE[Show rider profile, current GPS marker and route when available]
+  MAP -- No --> STATIC[Show order status and saved customer/shop context without a live rider marker]
+  LIVE --> D_STATUS{Delivery/order status}
+  STATIC --> D_STATUS
+  D_STATUS -- pending / confirmed --> D_CONF[Confirmed / queued]
+  D_STATUS -- preparing --> D_PREP[Preparing]
+  D_STATUS -- ready / rider_assigned --> D_ASSIGNED[Ready / rider assigned]
+  D_STATUS -- picked_up / on_the_way / out_for_delivery --> D_ROUTE[Out for Delivery; follow rider updates]
+  D_STATUS -- delivered / completed --> D_DONE([Delivered; retain in order history])
+  D_CONF --> CANCEL_CHECK
+  D_PREP --> CANCEL_CHECK
+  D_ASSIGNED --> CANCEL_CHECK
+  D_ROUTE --> CANCEL_CHECK
+
+  CANCEL_CHECK{Backend allows customer cancellation now?}
+  CANCEL_CHECK -- No: order progressed or payment confirmed --> ESCALATE[Show restriction; contact Customer Service for staff assistance]
+  ESCALATE --> HISTORY
+  CANCEL_CHECK -- Yes: eligible state and no paid payment --> REASON[/Choose/provide required cancellation reason/]
+  REASON --> ASK{Confirm cancellation?}
+  ASK -- No: keep order --> SELECT
+  ASK -- Yes --> LOCK[Laravel locks order and rechecks ownership, status and payment]
+  LOCK --> STILL_ALLOWED{Still eligible?}
+  STILL_ALLOWED -- No --> DENIED[Reject; order/payment unchanged]
+  DENIED --> SELECT
+  STILL_ALLOWED -- Yes --> CANCEL[Save cancelled status, reason and status log; expire pending QR attempt]
+  CANCEL --> CANCELLED([Cancelled order remains in order history])
+
+  classDef customer fill:#f5eadb,stroke:#765039,color:#2d211b,stroke-width:2px;
+  classDef backend fill:#e6eeeb,stroke:#2d676a,color:#1e3432,stroke-width:2px;
+  classDef decision fill:#fff3d9,stroke:#b58a55,color:#30291f,stroke-width:2px;
+  class START,P_DONE,D_DONE,CANCELLED customer;
+  class SELECT,PAYMENT,FULFILL,P_STATUS,MAP,D_STATUS,CANCEL_CHECK,ASK,STILL_ALLOWED decision;
+  class LOAD,LOCK,CANCEL backend;

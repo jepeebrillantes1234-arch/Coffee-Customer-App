@@ -1,0 +1,66 @@
+%% Membership purchase/activation, loyalty points, reward redemption and card delivery.
+flowchart TD
+  START([Open Membership & Rewards]) --> SUMMARY[Laravel loads membership/payment, balance, points transactions and available rewards]
+  SUMMARY --> MEMBER{Membership active and paid?}
+  MEMBER -- No --> JOIN{Choose to purchase membership?}
+  JOIN -- No --> HOME([Return to Home])
+  JOIN -- Yes --> START_PAY[Start membership checkout; use configured membership price]
+  START_PAY --> CREATED{Laravel returns checkout/payment details?}
+  CREATED -- No --> PAY_ERROR[Show checkout error; retry supported checkout]
+  PAY_ERROR --> START_PAY
+  CREATED -- Yes --> MEMBER_QR[Open QRPh payment screen; display pending status]
+  MEMBER_QR --> PAYMONGO[PayMongo handles QRPh payment]
+  PAYMONGO --> VERIFY{Laravel confirms provider payment?}
+  VERIFY -- No, pending --> MEMBER_QR
+  VERIFY -- No, failed/expired --> RETRY{Retry available?}
+  RETRY -- Yes --> START_PAY
+  RETRY -- No --> INACTIVE[Keep membership inactive; show payment state]
+  INACTIVE --> HOME
+  VERIFY -- Yes --> ACTIVATE[Laravel records paid payment and activates membership idempotently]
+  ACTIVATE --> ACTIVE[Display active membership, Member ID and digital card/QR]
+  MEMBER -- Yes --> ACTIVE
+
+  ACTIVE --> ORDER_EARN[Place and complete an eligible paid order]
+  ORDER_EARN --> EARNED{Order delivered/completed, paid, active member and not already awarded?}
+  EARNED -- No --> NO_POINTS[No points awarded for this order]
+  EARNED -- Yes --> ADD_POINTS[Laravel awards points from eligible item quantity and records transaction]
+  NO_POINTS --> REWARDS
+  ADD_POINTS --> REWARDS[Browse rewards and points transaction/redemption history]
+  REWARDS --> REWARD{Select reward to redeem?}
+  REWARD -- No --> CARD_OPT
+  REWARD -- Yes --> ELIGIBLE{Active membership, enough points, reward available?}
+  ELIGIBLE -- No --> NOT_ELIGIBLE[Show eligibility/availability message]
+  NOT_ELIGIBLE --> REWARDS
+  ELIGIBLE -- Yes --> FULFILL{Choose Store Pickup or Delivery?}
+  FULFILL -- Delivery --> REWARD_ADDRESS[/Select saved address and review delivery fee quote/]
+  REWARD_ADDRESS --> REDEEM_REQ
+  FULFILL -- Store Pickup --> REDEEM_REQ[Confirm redemption with request key]
+  REDEEM_REQ --> REDEEM_SERVER[Laravel locks membership/reward; checks points and stock; records redemption]
+  REDEEM_SERVER --> REDEMPTION[Show redemption QR/reference code and redemption history]
+  REDEMPTION --> CLAIM[Present redemption code to staff when claiming reward]
+  CLAIM --> CARD_OPT
+
+  CARD_OPT{Request physical membership card delivery?}
+  CARD_OPT -- No --> END_MEMBER([Continue using membership])
+  CARD_OPT -- Yes --> CARD_ADDRESS[/Select/review saved delivery address, map pin, coordinates and notes/]
+  CARD_ADDRESS --> PAID_ACTIVE{Backend verifies membership is active and has paid payment?}
+  PAID_ACTIVE -- No --> CARD_DENIED[Show eligibility message]
+  CARD_DENIED --> END_MEMBER
+  PAID_ACTIVE -- Yes --> DUPLICATE{Existing card-delivery request?}
+  DUPLICATE -- Yes --> CURRENT[Show existing request and current delivery status]
+  CURRENT --> END_MEMBER
+  DUPLICATE -- No --> REQUEST[Create separate card-delivery request with address/contact/destination snapshot]
+  REQUEST --> STAFF[Staff sees Pending; prepares card, marks Ready and assigns rider]
+  STAFF --> RIDER[Rider updates separate card delivery: Out for Delivery then Delivered]
+  RIDER --> DELIVERED{Card delivered?}
+  DELIVERED -- No --> RIDER
+  DELIVERED -- Yes --> END_CARD([Membership card delivered; payment remains Paid])
+
+  classDef customer fill:#f5eadb,stroke:#765039,color:#2d211b,stroke-width:2px;
+  classDef backend fill:#e6eeeb,stroke:#2d676a,color:#1e3432,stroke-width:2px;
+  classDef provider fill:#e8edf6,stroke:#405f80,color:#25344b,stroke-width:2px;
+  classDef decision fill:#fff3d9,stroke:#b58a55,color:#30291f,stroke-width:2px;
+  class START,HOME,END_MEMBER,END_CARD customer;
+  class MEMBER,JOIN,CREATED,VERIFY,RETRY,EARNED,REWARD,ELIGIBLE,FULFILL,CARD_OPT,PAID_ACTIVE,DUPLICATE,DELIVERED decision;
+  class SUMMARY,ACTIVATE,ADD_POINTS,REDEEM_SERVER,REQUEST backend;
+  class PAYMONGO provider;

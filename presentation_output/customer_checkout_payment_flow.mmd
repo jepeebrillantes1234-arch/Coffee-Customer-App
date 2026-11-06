@@ -1,0 +1,62 @@
+%% Checkout, payment creation, server confirmation and unpaid QRPh expiry.
+flowchart TD
+  START([Start Checkout from Cart]) --> ITEMS{Cart contains valid available items?}
+  ITEMS -- No --> CART[Return to Cart; update items]
+  CART --> START
+  ITEMS -- Yes --> FULFILL{Choose fulfillment}
+  FULFILL -- Delivery --> ADDRESS[/Select/review saved delivery address and map pin/]
+  ADDRESS --> ADDRESS_VALID{Complete address and valid coordinates?}
+  ADDRESS_VALID -- No --> ADDRESS
+  ADDRESS_VALID -- Yes --> FEE[Laravel quotes delivery fee and authoritative item/discount totals]
+  FULFILL -- Pickup --> NO_FEE[No delivery destination/fee]
+  FEE --> HOURS{Shop open for new orders?}
+  NO_FEE --> HOURS
+  HOURS -- No --> CLOSED[Show unavailable/closed response; keep order unsubmitted]
+  CLOSED --> END_CLOSED([Return to Cart or retry during operating hours])
+  HOURS -- Yes --> SUMMARY[Review subtotal, discounts, delivery fee and total]
+  SUMMARY --> METHOD{Select eligible payment method}
+  METHOD -- Delivery: COD --> COD[/Confirm Cash on Delivery/]
+  METHOD -- Pickup: cash --> CASH[/Confirm Cash at Pickup/]
+  METHOD -- QRPh --> QR_SUBMIT[/Submit QRPh order using stable checkout request ID/]
+  COD --> CREATE[Laravel validates, recalculates and idempotently creates order]
+  CASH --> CREATE
+  QR_SUBMIT --> CREATE
+  CREATE --> CREATED{Order created successfully?}
+  CREATED -- No --> CREATE_ERROR[Show backend validation/network error]
+  CREATE_ERROR --> METHOD
+  CREATED -- Yes --> PAYMENT_KIND{Payment method?}
+  PAYMENT_KIND -- COD or cash --> CASH_STATE[Order remains unpaid until existing cash collection]
+  CASH_STATE --> CONFIRM[Order appears in My Orders]
+  PAYMENT_KIND -- QRPh --> QR_DETAILS{QR/payment details returned?}
+  QR_DETAILS -- No --> INIT_ERROR[Show error; retry with same order/payment attempt where supported]
+  INIT_ERROR --> QR_DETAILS
+  QR_DETAILS -- Yes --> PAYMONGO[PayMongo Payment Intent provides QRPh details]
+  PAYMONGO --> QR_SCREEN[Open QRPh screen; show amount, reference, expiry and instructions]
+  QR_SCREEN --> STATUS{Laravel confirms payment paid?}
+  STATUS -- Yes --> SUCCESS[Laravel confirms via webhook or provider status; app shows success]
+  SUCCESS --> CONFIRM
+  STATUS -- No --> CHECK[Flutter polls Laravel; customer may Check Status]
+  CHECK --> FAIL_STATE{Provider/payment state?}
+  FAIL_STATE -- Pending --> STATUS
+  FAIL_STATE -- Failed or QR expired --> RETRY{Retry permitted?}
+  RETRY -- Yes --> RETRY_PAYMENT[Retry existing order/payment attempt; no duplicate order]
+  RETRY_PAYMENT --> QR_DETAILS
+  RETRY -- No --> FAILED[Show failure/expired state; keep order accessible if not expired]
+  FAILED --> CONFIRM
+  FAIL_STATE -- No verified payment after 30-minute timeout --> PROVIDER_CHECK[Scheduled backend task checks PayMongo status]
+  PROVIDER_CHECK --> VERIFIED_UNPAID{Provider confirms still unpaid?}
+  VERIFIED_UNPAID -- No / unable to verify --> STATUS
+  VERIFIED_UNPAID -- Yes --> EXPIRE[Mark unpaid QRPh order cancelled/expired and archive from customer active list]
+  EXPIRE --> RETAIN[Keep order/payment history records; no deletion]
+  RETAIN --> END_EXPIRED([Order no longer active in My Orders])
+  CONFIRM --> TRACK[Open Pickup or Delivery tracking]
+  TRACK --> END([Continue to order tracking])
+
+  classDef customer fill:#f5eadb,stroke:#765039,color:#2d211b,stroke-width:2px;
+  classDef backend fill:#e6eeeb,stroke:#2d676a,color:#1e3432,stroke-width:2px;
+  classDef provider fill:#e8edf6,stroke:#405f80,color:#25344b,stroke-width:2px;
+  classDef decision fill:#fff3d9,stroke:#b58a55,color:#30291f,stroke-width:2px;
+  class START,END,END_CLOSED,END_EXPIRED customer;
+  class ITEMS,FULFILL,ADDRESS_VALID,HOURS,METHOD,CREATED,PAYMENT_KIND,QR_DETAILS,STATUS,FAIL_STATE,RETRY,VERIFIED_UNPAID decision;
+  class FEE,CREATE,CREATE_ERROR,PROVIDER_CHECK,EXPIRE,RETAIN backend;
+  class PAYMONGO provider;

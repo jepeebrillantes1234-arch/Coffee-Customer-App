@@ -1,0 +1,47 @@
+%% Verified Flutter customer entry, account and product exploration flow.
+flowchart TD
+    START([Start]) --> INIT[main.dart initializes Firebase, API session and theme]
+    INIT --> SPLASH[Show animated Splash Screen]
+    SPLASH --> SESSION{Cached authenticated session?}
+    SESSION -- Yes --> ROLE{Customer role?}
+    ROLE -- Yes --> HOME[RootScreen opens Home tab]
+    ROLE -- No --> OTHER[Role router opens the role-specific app]
+    SESSION -- No --> GETSTART[Get Started]
+    GETSTART --> CHOOSE{Login or Register?}
+    CHOOSE -- Login --> CREDENTIALS[/Email, username or phone and password; Google sign-in also available/]
+    CHOOSE -- Register --> REG_FIELDS[/Name, username, email, phone, password and confirmation/]
+    CREDENTIALS --> LOGIN_API[Laravel login or Google-token verification]
+    REG_FIELDS --> REG_API[Laravel creates customer account and session]
+    LOGIN_API --> LOGIN_OK{Authentication successful?}
+    REG_API --> REG_OK{Registration successful?}
+    LOGIN_OK -- No --> ERR[Show validation or authentication error]
+    REG_OK -- No --> ERR
+    ERR --> HELP{Forgot password or retry?}
+    HELP -- Forgot password --> RESET[/Submit email to password reset endpoint/]
+    RESET --> CHOOSE
+    HELP -- Retry --> CHOOSE
+    LOGIN_OK -- Yes --> HOME
+    REG_OK -- Yes --> HOME
+
+    HOME --> HOME_ACTION{Browse products?}
+    HOME_ACTION -- Home carousel or popup --> CATALOG[Open existing supported catalog destination]
+    HOME_ACTION -- Menu --> CATALOG
+    CATALOG --> LIST[Load categories and available products from Laravel]
+    LIST --> SELECT{Select product?}
+    SELECT -- No --> CATALOG
+    SELECT -- Yes --> PRODUCT[Open product details and supported options]
+    PRODUCT --> FAVORITE{Toggle favorite?}
+    FAVORITE -- Yes --> FAVORITE_STORE[Update existing favorite state]
+    FAVORITE -- No --> ADD[Choose options and add to cart]
+    FAVORITE_STORE --> ADD
+    ADD --> CART[Cart: change quantity, remove or edit items]
+    CART --> NEXT{Continue shopping or checkout?}
+    NEXT -- Continue shopping --> CATALOG
+    NEXT -- Checkout --> CHECKOUT[Proceed to checkout flow]
+
+    classDef customer fill:#f5eadb,stroke:#765039,color:#2d211b,stroke-width:2px;
+    classDef backend fill:#e6eeeb,stroke:#2d676a,color:#1e3432,stroke-width:2px;
+    classDef decision fill:#fff3d9,stroke:#b58a55,color:#30291f,stroke-width:2px;
+    class START customer;
+    class SESSION,ROLE,CHOOSE,LOGIN_OK,REG_OK,HELP,HOME_ACTION,SELECT,FAVORITE,NEXT decision;
+    class LOGIN_API,REG_API,RESET,LIST,FAVORITE_STORE backend;

@@ -392,7 +392,16 @@ class Api {
     );
     final order = Map<String, dynamic>.from(data['order'] as Map);
     final checkout = data['checkout'];
-    if (checkout is Map) order['checkout_url'] = checkout['url'];
+    if (checkout is Map) {
+      // Keep the order's own status (awaiting_payment) distinct from the
+      // payment attempt status returned by the gateway.
+      final checkoutDetails = Map<String, dynamic>.from(checkout);
+      final paymentAttemptStatus = checkoutDetails.remove('status');
+      final checkoutUrl = checkoutDetails.remove('url');
+      order.addAll(checkoutDetails);
+      order['payment_attempt_status'] = paymentAttemptStatus;
+      order['checkout_url'] = checkoutUrl;
+    }
     return order;
   }
 
