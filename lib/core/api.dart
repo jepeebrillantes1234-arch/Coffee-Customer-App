@@ -136,6 +136,9 @@ class Api {
     bool auth = true,
     String? tokenOverride,
     Map<String, String>? extraHeaders,
+    Duration? sendTimeout,
+    Duration? receiveTimeout,
+    void Function(int sent, int total)? onSendProgress,
   }) async {
     final token = tokenOverride ?? _token;
     try {
@@ -145,11 +148,14 @@ class Api {
         queryParameters: query,
         options: Options(
           method: method,
+          sendTimeout: sendTimeout,
+          receiveTimeout: receiveTimeout,
           headers: {
             if (auth && token != null) 'Authorization': 'Bearer $token',
             ...?extraHeaders,
           },
         ),
+        onSendProgress: onSendProgress,
       );
       final data = res.data;
       if (data is Map) return Map<String, dynamic>.from(data);
@@ -166,6 +172,17 @@ class Api {
       if (code == 401 && auth && tokenOverride == null) {
         await _save(null, null);
         throw ApiException('Your session expired. Please log in again.');
+      }
+      if (path.startsWith('/rider/deliveries/') &&
+          path.endsWith('/delivered') &&
+          (e.type == DioExceptionType.sendTimeout ||
+              e.type == DioExceptionType.receiveTimeout ||
+              e.type == DioExceptionType.connectionTimeout)) {
+        throw ApiException(
+          'The connection is slow and the server response was not received. '
+          'Your delivery may already be recorded. Keep this screen open and '
+          'submit again to safely check the result.',
+        );
       }
       if (d is Map) {
         final errs = d['errors'];
@@ -931,7 +948,12 @@ class Api {
   }
 
   /// Mark delivered: may larawan (patunay) at cash na natanggap (kung COD)
-  Future<void> deliverWithProof(int id, String filePath, double? cash) async {
+  Future<void> deliverWithProof(
+    int id,
+    String filePath,
+    double? cash, {
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
     final form = FormData.fromMap({
       'proof_photo': await MultipartFile.fromFile(
         filePath,
@@ -939,6 +961,13 @@ class Api {
       ),
       if (cash != null) 'cash_collected': cash.toStringAsFixed(2),
     });
-    await _call('POST', '/rider/deliveries/$id/delivered', body: form);
+    await _call(
+      'POST',
+      '/rider/deliveries/$id/delivered',
+      body: form,
+      sendTimeout: const Duration(seconds: 90),
+      receiveTimeout: const Duration(seconds: 90),
+      onSendProgress: onSendProgress,
+    );
   }
 }

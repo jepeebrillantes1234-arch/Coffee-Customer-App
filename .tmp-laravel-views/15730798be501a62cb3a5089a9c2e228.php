@@ -1,0 +1,57 @@
+<?php
+    $mcdAdminUser = auth()->user()?->role === 'admin';
+    $mcdIndexUrl = $mcdAdminUser ? route('admin.membership-card-deliveries.index') : route('staff.membership-card-deliveries.index');
+    $mcdInitialLatestId = \App\Models\MembershipCardDelivery::max('id') ?? 0;
+?>
+<div class="mcd-notification-widget"
+     data-mcd-endpoint="<?php echo e(route('staff.membership-card-deliveries.notifications')); ?>"
+     data-mcd-index-url="<?php echo e($mcdIndexUrl); ?>"
+     data-mcd-seen-key="kjm-mcd-last-seen-<?php echo e($mcdAdminUser ? 'admin' : 'staff'); ?>"
+     data-mcd-sound-key="<?php echo e($mcdAdminUser ? 'kjm-mcd-sound' : 'staff_sound'); ?>"
+     data-mcd-initial-latest-id="<?php echo e($mcdInitialLatestId); ?>">
+    <button type="button" class="mcd-notification-button" data-mcd-toggle aria-expanded="false" aria-label="Membership card delivery notifications" title="Membership card delivery requests">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
+        <span class="mcd-notification-badge" data-mcd-count hidden>0</span>
+    </button>
+    <section class="mcd-notification-dropdown" data-mcd-dropdown hidden>
+        <header><strong>Membership Card Requests</strong><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($mcdAdminUser): ?><button type="button" data-mcd-sound-toggle aria-pressed="false">Enable sound</button><?php else: ?><span class="mcd-sound-hint">Uses the Staff Sound setting</span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></header>
+        <div class="mcd-notification-list" data-mcd-list><p class="mcd-notification-empty">Loading requests...</p></div>
+        <a class="mcd-notification-footer" href="<?php echo e($mcdIndexUrl); ?>">View all membership card deliveries</a>
+    </section>
+</div>
+
+<?php if (! $__env->hasRenderedOnce('8354b75f-2985-4347-946a-22fa61d9b2d8')): $__env->markAsRenderedOnce('8354b75f-2985-4347-946a-22fa61d9b2d8'); ?>
+<style>
+    .mcd-notification-widget{position:relative;flex:0 0 auto}.mcd-notification-button{position:relative;display:grid;place-items:center;width:40px;height:40px;border:1px solid #eee7e0;border-radius:50%;background:#fffdfb;color:#573429;cursor:pointer}.mcd-notification-button:hover,.mcd-notification-button[aria-expanded="true"]{background:#f8eee5;border-color:#d9b99f}
+    .mcd-notification-badge{position:absolute;right:-4px;top:-4px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:#dc4b3e;color:#fff;font:700 10px/17px sans-serif;text-align:center}.mcd-notification-badge[hidden]{display:none}
+    .mcd-notification-dropdown{position:fixed;top:78px;right:18px;z-index:95;width:min(380px,calc(100vw - 24px));max-height:min(72vh,520px);overflow:auto;border:1px solid #eee5dc;border-radius:16px;background:#fffdfb;color:#342017;box-shadow:0 18px 45px #30180f24}.mcd-notification-dropdown[hidden]{display:none}.mcd-notification-dropdown>header{position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;border-bottom:1px solid #f0e8e1;background:inherit}.mcd-notification-dropdown>header strong{font-size:13px}.mcd-notification-dropdown>header button{border:1px solid #e7dacf;border-radius:9px;background:#fff8f1;color:#68432e;padding:6px 8px;font-size:11px;font-weight:700;cursor:pointer}.mcd-notification-dropdown>header button[aria-pressed="true"]{background:#edf8ef;border-color:#cde8d1;color:#237444}
+    .mcd-notification-entry{display:block;padding:12px 15px;border-bottom:1px solid #f4eee8;color:inherit;text-decoration:none}.mcd-notification-entry:hover{background:#fbf5ef}.mcd-notification-entry strong{display:block;font-size:12px}.mcd-notification-entry small{display:block;margin-top:4px;color:#7c6c60;font-size:11px}.mcd-notification-empty{padding:18px 15px;color:#807267;font-size:12px}.mcd-notification-footer{display:block;padding:12px 15px;color:#8c4b25;text-align:center;text-decoration:none;font-size:12px;font-weight:700}.mcd-sound-hint{color:#807267;font-size:10px}
+    .mcd-notification-toast{position:fixed;right:18px;top:90px;z-index:1000;width:min(370px,calc(100vw - 28px));padding:13px 15px;margin-bottom:8px;background:#fffdfb;color:#30231d;border:1px solid #eaded4;border-left:4px solid #b86a2c;border-radius:13px;box-shadow:0 16px 40px #29190f30}.mcd-notification-toast a{color:inherit;text-decoration:none}.mcd-notification-toast strong,.mcd-notification-toast small{display:block}.mcd-notification-toast small{margin-top:4px;color:#75685f;font-size:11px}
+    body.staff-shell[data-staff-theme=dark] .mcd-notification-button{background:#241e1a;border-color:#51443b;color:#eee6df}body.staff-shell[data-staff-theme=dark] .mcd-notification-dropdown{background:#241e1a;color:#eee6df;border-color:#51443b}body.staff-shell[data-staff-theme=dark] .mcd-notification-entry{border-color:#40352f}body.staff-shell[data-staff-theme=dark] .mcd-notification-entry small{color:#b7aaa0}body.staff-shell[data-staff-theme=dark] .mcd-notification-dropdown>header button{background:#302823;border-color:#51443b;color:#eee6df}
+    @media(max-width:800px){.mcd-notification-dropdown{top:68px;right:12px}.mcd-notification-toast{right:12px;top:78px}}
+</style>
+<script>
+(()=>{
+    const widget=document.querySelector('.mcd-notification-widget');if(!widget)return;
+    const endpoint=widget.dataset.mcdEndpoint;const seenKey=widget.dataset.mcdSeenKey;const initialId=Number(widget.dataset.mcdInitialLatestId)||0;
+    const badge=widget.querySelector('[data-mcd-count]');const dropdown=widget.querySelector('[data-mcd-dropdown]');const list=widget.querySelector('[data-mcd-list]');const toggle=widget.querySelector('[data-mcd-toggle]');const soundToggle=widget.querySelector('[data-mcd-sound-toggle]');
+    const soundKey=widget.dataset.mcdSoundKey;let audioContext=null;let busy=false;let toastOffset=0;
+    const soundEnabled=()=>localStorage.getItem(soundKey)==='1';
+    const paintSound=()=>{const enabled=soundEnabled();soundToggle?.setAttribute('aria-pressed',enabled?'true':'false');if(soundToggle)soundToggle.textContent=enabled?'Sound enabled':'Enable sound'};paintSound();
+    const playSound=async()=>{if(!soundEnabled())return;try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;audioContext=audioContext||new Audio();if(audioContext.state==='suspended')await audioContext.resume();[880,1175,880].forEach((f,i)=>{const o=audioContext.createOscillator(),g=audioContext.createGain(),t=audioContext.currentTime+i*.16;o.frequency.value=f;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.16,t+.025);g.gain.exponentialRampToValueAtTime(.0001,t+.17);o.connect(g);g.connect(audioContext.destination);o.start(t);o.stop(t+.18)})}catch(_){}};
+    document.getElementById('staff-sound-toggle')?.addEventListener('click',()=>{try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;audioContext=audioContext||new Audio();if(audioContext.state==='suspended')audioContext.resume().catch(()=>{})}catch(_){}});
+    const stamp=item=>{const date=item.requested_at?new Date(item.requested_at):null;return date&&!Number.isNaN(date.valueOf())?date.toLocaleString(): 'Request time unavailable'};
+    const announce=item=>{
+        playSound();const toast=document.createElement('div');toast.className='mcd-notification-toast';toast.style.top=`${90+toastOffset}px`;toastOffset=(toastOffset+86)%344;
+        const link=document.createElement('a');link.href=item.url||widget.dataset.mcdIndexUrl;const title=document.createElement('strong');title.textContent='New membership card request';const details=document.createElement('small');details.textContent=`${item.customer||'Customer'} · ${item.member_id||'Member ID unavailable'} · ${stamp(item)}`;link.append(title,details);toast.append(link);document.body.append(toast);setTimeout(()=>toast.remove(),10000);
+        if('Notification'in window&&Notification.permission==='granted'){try{const notice=new Notification('New membership card request',{body:`${item.customer||'Customer'} · ${item.member_id||'Member ID unavailable'} · ${stamp(item)}`,tag:`membership-card-delivery-${item.id}`});notice.onclick=()=>{window.focus();location.href=item.url||widget.dataset.mcdIndexUrl;notice.close()}}catch(_){/* In-page alert remains available if desktop notifications are blocked. */}}
+    };
+    const renderPending=items=>{list.replaceChildren();if(!items.length){const empty=document.createElement('p');empty.className='mcd-notification-empty';empty.textContent='No pending membership card requests.';list.append(empty);return}items.forEach(item=>{const a=document.createElement('a');a.className='mcd-notification-entry';a.href=item.url||widget.dataset.mcdIndexUrl;const title=document.createElement('strong');title.textContent=`${item.customer||'Customer'} · ${item.member_id||'Member ID unavailable'}`;const time=document.createElement('small');time.textContent=stamp(item);a.append(title,time);list.append(a)})};
+    const poll=async()=>{if(busy)return;busy=true;try{const stored=localStorage.getItem(seenKey);const after=stored===null?initialId:(Number(stored)||0);const url=new URL(endpoint,location.href);url.searchParams.set('after_id',String(after));const response=await fetch(url,{cache:'no-store',credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});if(!response.ok)return;const data=await response.json();const pending=Array.isArray(data.pending_requests)?data.pending_requests:[];badge.textContent=data.pending_count>99?'99+':String(data.pending_count||0);badge.hidden=!(Number(data.pending_count)>0);renderPending(pending);const fresh=Array.isArray(data.new_requests)?data.new_requests:[];fresh.forEach(announce);localStorage.setItem(seenKey,String(Math.max(after,Number(data.latest_id)||0)))}catch(_){/* Keep dashboard usable during transient network errors. */}finally{busy=false}};
+    toggle?.addEventListener('click',()=>{const opening=dropdown.hidden;dropdown.hidden=!opening;toggle.setAttribute('aria-expanded',opening?'true':'false');if(opening)poll()});document.addEventListener('click',e=>{if(!widget.contains(e.target)){dropdown.hidden=true;toggle.setAttribute('aria-expanded','false')}});
+    soundToggle?.addEventListener('click',async()=>{if(!soundEnabled()){if('Notification'in window&&Notification.permission==='default'){try{await Notification.requestPermission()}catch(_){}}localStorage.setItem(soundKey,'1');await playSound()}else localStorage.setItem(soundKey,'0');paintSound()});
+    window.addEventListener('live-update',e=>{if(e.detail?.kind==='membership_card_delivery')poll()});document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});poll();window.setInterval(poll,5000);
+})();
+</script>
+<?php endif; ?>
+<?php /**PATH C:\xampp\htdocs\coffee-shop\resources\views/staff/membership-card-deliveries/notifications-widget.blade.php ENDPATH**/ ?>

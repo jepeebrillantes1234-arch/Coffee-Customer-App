@@ -43,11 +43,16 @@ class _RefundHistoryScreenState extends State<RefundHistoryScreen> {
   String _label(String value) => value
       .split('_')
       .map(
-        (part) => part.isEmpty
-            ? part
-            : '${part[0].toUpperCase()}${part.substring(1)}',
+        (part) =>
+            part.isEmpty ? part : part[0].toUpperCase() + part.substring(1),
       )
       .join(' ');
+
+  String _refundStatusLabel(String value) => switch (value) {
+    'refunded' => 'Succeeded',
+    'partially_refunded' => 'Partially Succeeded',
+    _ => _label(value),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -96,10 +101,9 @@ class _RefundHistoryScreenState extends State<RefundHistoryScreen> {
                   final status = '${request['status'] ?? 'pending'}';
                   final attempts = (request['attempts'] as List?) ?? const [];
                   final rejectedReason = request['decision_reason']?.toString();
-                  final amount =
-                      request['refunded_amount'] ??
-                      request['approved_amount'] ??
-                      request['requested_amount'];
+                  final requestedAmount = request['requested_amount'];
+                  final approvedAmount = request['approved_amount'];
+                  final refundedAmount = request['refunded_amount'];
                   return Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -116,15 +120,23 @@ class _RefundHistoryScreenState extends State<RefundHistoryScreen> {
                                   ),
                                 ),
                               ),
-                              Chip(label: Text(_label(status))),
+                              Chip(label: Text(_refundStatusLabel(status))),
                             ],
                           ),
                           Text(
                             'Reason: ${_label('${request['reason'] ?? 'other'}')}',
                           ),
-                          if (amount != null)
+                          if (requestedAmount != null)
                             Text(
-                              'Refund amount: ${peso((num.tryParse('$amount') ?? 0) / 100)}',
+                              'Requested: ${peso((num.tryParse('${requestedAmount}') ?? 0) / 100)}',
+                            ),
+                          if (approvedAmount != null)
+                            Text(
+                              'Approved: ${peso((num.tryParse('${approvedAmount}') ?? 0) / 100)}',
+                            ),
+                          if (refundedAmount != null)
+                            Text(
+                              'Refund confirmed: ${peso((num.tryParse('${refundedAmount}') ?? 0) / 100)}',
                             ),
                           if ((request['explanation'] ?? '')
                               .toString()

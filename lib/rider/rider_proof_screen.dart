@@ -26,6 +26,7 @@ class _RiderProofScreenState extends State<RiderProofScreen> {
   XFile? _photo;
   final _cash = TextEditingController();
   bool _busy = false;
+  double? _uploadProgress;
   String? _error;
 
   bool get _cod =>
@@ -83,10 +84,21 @@ class _RiderProofScreenState extends State<RiderProofScreen> {
 
     setState(() {
       _busy = true;
+      _uploadProgress = 0;
       _error = null;
     });
     try {
-      await Api.I.deliverWithProof(widget.deliveryId, _photo!.path, cash);
+      await Api.I.deliverWithProof(
+        widget.deliveryId,
+        _photo!.path,
+        cash,
+        onSendProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          setState(
+            () => _uploadProgress = (sent / total).clamp(0.0, 1.0).toDouble(),
+          );
+        },
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -355,6 +367,19 @@ class _RiderProofScreenState extends State<RiderProofScreen> {
                     ),
                   ),
                 ),
+              ],
+              if (_busy) ...[
+                const SizedBox(height: 8),
+                LinearProgressIndicator(value: _uploadProgress),
+                const SizedBox(height: 6),
+                Text(
+                  _uploadProgress == null || _uploadProgress! < 1
+                      ? 'Uploading proof over your connection…'
+                      : 'Upload complete. Waiting for server confirmation…',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: secondary, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
               ],
               const SizedBox(height: 18),
               FilledButton.icon(

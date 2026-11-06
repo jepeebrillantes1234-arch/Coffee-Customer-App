@@ -156,6 +156,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
 
+  String _englishCheckoutMessage(String message) {
+    final normalized = message.trim().toLowerCase();
+    if (normalized == 'lampas sa delivery radius ang lokasyon.') {
+      return 'This location is outside the delivery area.';
+    }
+    return message;
+  }
+
   Future<void> _refresh() async {
     final seq = ++_quoteSeq;
     setState(() => _quoting = true);
@@ -170,7 +178,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (!mounted || seq != _quoteSeq) return;
       setState(() {
         _quote = null;
-        _error = e.message;
+        _error = _englishCheckoutMessage(e.message);
       });
     } finally {
       if (mounted && seq == _quoteSeq) setState(() => _quoting = false);
@@ -234,11 +242,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.message;
+          _error = _englishCheckoutMessage(e.message);
           _qrCheckoutFailed = _paymentMethod == 'qrph';
         });
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_englishCheckoutMessage(e.message))),
+        );
       }
     } finally {
       if (mounted) setState(() => _placing = false);
