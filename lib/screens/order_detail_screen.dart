@@ -17,6 +17,8 @@ import 'order_contents_screen.dart';
 import 'payment_screen.dart';
 import 'rider_chat_screen.dart';
 import 'customer_service_sheet.dart';
+import 'refund_history_screen.dart';
+import 'refund_request_screen.dart';
 
 String _timeTextInManila(dynamic value) {
   final raw = value?.toString().trim() ?? '';
@@ -857,18 +859,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               Expanded(
                                 child: _trackingStep(
                                   (isPickup
-                                          ? const [
-                                              'Confirmed',
-                                              'Preparing',
-                                              'Ready',
-                                              'Ready for Pickup',
-                                            ]
-                                          : const [
-                                              'Confirmed',
-                                              'Preparing',
-                                              'Ready',
-                                              'Delivered',
-                                            ])[step],
+                                      ? const [
+                                          'Confirmed',
+                                          'Preparing',
+                                          'Ready',
+                                          'Ready for Pickup',
+                                        ]
+                                      : const [
+                                          'Confirmed',
+                                          'Preparing',
+                                          'Ready',
+                                          'Delivered',
+                                        ])[step],
                                   step,
                                   currentStep,
                                   isCurrent:
@@ -987,6 +989,43 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     icon: const Icon(Icons.qr_code_2_rounded),
                     label: Text('Pay with QRPh  |  ${peso(dbl(o['total']))}'),
                   ),
+                if (o['payment_method']?.toString().toLowerCase() == 'qrph' &&
+                    const {'paid', 'partially_refunded'}.contains(
+                      o['payment_status']?.toString().toLowerCase(),
+                    )) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                            final navigator = Navigator.of(context);
+                            final submitted = await navigator.push<bool>(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    RefundRequestScreen(orderId: widget.id),
+                              ),
+                            );
+                            if (!mounted || submitted != true) return;
+                            await navigator.push<void>(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    RefundHistoryScreen(orderId: widget.id),
+                              ),
+                            );
+                          },
+                    icon: const Icon(Icons.request_quote_outlined),
+                    label: const Text('Request a Refund'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute(
+                        builder: (_) => RefundHistoryScreen(orderId: widget.id),
+                      ),
+                    ),
+                    icon: const Icon(Icons.history_rounded),
+                    label: const Text('Refund Request History'),
+                  ),
+                ],
                 if (o['can_cancel'] == true &&
                     const {'awaiting_payment', 'pending'}.contains(status))
                   OutlinedButton.icon(
@@ -1139,10 +1178,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 point: riderPoint,
                 width: 76,
                 height: 60,
-                child: _deliveryMapMarker(
-                  context,
-                  riderAvatarUrl,
-                ),
+                child: _deliveryMapMarker(context, riderAvatarUrl),
               ),
           ],
         ),

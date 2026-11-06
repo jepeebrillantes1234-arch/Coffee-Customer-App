@@ -459,6 +459,45 @@ class Api {
     );
   }
 
+  Future<Map<String, dynamic>> submitRefundRequest(
+    int orderId, {
+    required String reason,
+    required String explanation,
+    List<String> photoPaths = const [],
+  }) async {
+    final form = FormData.fromMap({
+      'reason': reason,
+      'explanation': explanation,
+    });
+    for (final path in photoPaths) {
+      form.files.add(MapEntry('photos[]', await MultipartFile.fromFile(path)));
+    }
+    return Map<String, dynamic>.from(
+      _d(await _call('POST', '/orders/$orderId/refund-requests', body: form))
+          as Map,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> refundRequestsForOrder(int orderId) async {
+    final data = _d(await _call('GET', '/orders/$orderId/refund-requests'));
+    return data is List
+        ? data
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList()
+        : const [];
+  }
+
+  Future<List<Map<String, dynamic>>> refundHistory() async {
+    final data = _d(await _call('GET', '/refund-requests'));
+    return data is List
+        ? data
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList()
+        : const [];
+  }
+
   Future<void> deleteOrder(int id) async {
     await _call('DELETE', '/orders/$id');
   }

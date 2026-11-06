@@ -17,6 +17,7 @@ import 'notifications_screen.dart';
 import 'customer_service_sheet.dart';
 import 'edit_profile_screen.dart';
 import 'membership_screen.dart';
+import 'refund_history_screen.dart';
 import 'payment_methods_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -718,6 +719,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Icons.receipt_long_outlined,
                 'My Orders',
                 () => rootTab.value = 3,
+              ),
+              const Divider(height: 1, indent: 74),
+              _profileRow(
+                context,
+                Icons.history_rounded,
+                'Refund History',
+                () => open(const RefundHistoryScreen()),
               ),
               const Divider(height: 1, indent: 74),
               _profileRow(
