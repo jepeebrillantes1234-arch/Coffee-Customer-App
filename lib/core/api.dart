@@ -9,7 +9,8 @@ import 'util.dart';
 
 class ApiException implements Exception {
   final String message;
-  ApiException(this.message);
+  final int? statusCode;
+  ApiException(this.message, {this.statusCode});
   @override
   String toString() => message;
 }
@@ -37,6 +38,19 @@ class Api {
   String? get role => user?['role']?.toString();
   Future<void> Function()? onAuthenticated;
   Future<void> Function()? onBeforeLogout;
+  Future<Map<String, dynamic>?> Function(
+    Future<Map<String, dynamic>> Function()? retryRequest,
+    String? serverMessage,
+  )?
+  onHttp402;
+
+  @visibleForTesting
+  HttpClientAdapter get httpClientAdapterForTesting => _dio.httpClientAdapter;
+
+  @visibleForTesting
+  set httpClientAdapterForTesting(HttpClientAdapter adapter) {
+    _dio.httpClientAdapter = adapter;
+  }
 
   String? _resolveAvatarUrl(dynamic value) {
     final raw = value?.toString().trim();
@@ -139,6 +153,7 @@ class Api {
     Duration? sendTimeout,
     Duration? receiveTimeout,
     void Function(int sent, int total)? onSendProgress,
+    bool allow402Recovery = true,
   }) async {
     final token = tokenOverride ?? _token;
     try {
@@ -172,6 +187,42 @@ class Api {
       if (code == 401 && auth && tokenOverride == null) {
         await _save(null, null);
         throw ApiException('Your session expired. Please log in again.');
+      }
+      if (code == 402) {
+        final providerMessage = d is Map
+            ? d['message']?.toString().trim()
+            : null;
+        final serverMessage = providerMessage == null || providerMessage.isEmpty
+            ? null
+            : providerMessage.substring(
+                0,
+                providerMessage.length.clamp(0, 500),
+              );
+        if (method.toUpperCase() == 'GET' && allow402Recovery) {
+          final recovered = await onHttp402?.call(
+            () => _call(
+              method,
+              path,
+              body: body,
+              query: query,
+              auth: auth,
+              tokenOverride: token,
+              extraHeaders: extraHeaders,
+              sendTimeout: sendTimeout,
+              receiveTimeout: receiveTimeout,
+              onSendProgress: onSendProgress,
+              allow402Recovery: false,
+            ),
+            serverMessage,
+          );
+          if (recovered != null) return recovered;
+        } else if (allow402Recovery) {
+          await onHttp402?.call(null, serverMessage);
+        }
+        throw ApiException(
+          'The request was rejected with HTTP 402 (Payment Required). A connection retry may help with a temporary gateway issue, but it will not resolve billing, payment, or account restrictions. Your request was not reported as successful.',
+          statusCode: code,
+        );
       }
       if (path.startsWith('/rider/deliveries/') &&
           path.endsWith('/delivered') &&

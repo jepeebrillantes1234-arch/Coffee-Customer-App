@@ -1,4 +1,37 @@
+import 'package:flutter/foundation.dart';
+
 class AppConfig {
+  static const String publicWebsiteUrl = String.fromEnvironment(
+    'PUBLIC_WEBSITE_URL',
+    defaultValue: '',
+  );
+
+  static Uri? get productionWebsiteUri =>
+      parseProductionWebsiteUri(publicWebsiteUrl);
+
+  @visibleForTesting
+  static Uri? parseProductionWebsiteUri(String value) {
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null ||
+        uri.scheme.toLowerCase() != 'https' ||
+        !uri.hasAuthority ||
+        uri.userInfo.isNotEmpty ||
+        (uri.hasPort && uri.port != 443)) {
+      return null;
+    }
+
+    final host = uri.host.toLowerCase();
+    if (host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host == '::1' ||
+        host == '0.0.0.0' ||
+        host.contains('ngrok')) {
+      return null;
+    }
+
+    return uri;
+  }
+
   static const String reverbHost = String.fromEnvironment(
     'REVERB_HOST',
     defaultValue: 'switch-geometric-coagulant.ngrok-free.dev',

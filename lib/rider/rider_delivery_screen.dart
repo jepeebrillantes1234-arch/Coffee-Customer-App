@@ -55,7 +55,8 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
         _loading = false;
         if (!silent) _error = null;
       });
-      if (result['status'] == 'on_the_way') {
+      if (const {'assigned', 'accepted', 'picked_up', 'on_the_way'}
+          .contains(result['status'])) {
         await LocationService.I.start(deliveryId: widget.id);
         _routeTimer ??= Timer.periodic(
           const Duration(seconds: 8),

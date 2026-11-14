@@ -5,17 +5,31 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
 import 'core/api.dart';
+import 'core/config.dart';
+import 'core/http_402_warning.dart';
 import 'core/push_notifications.dart';
 import 'core/role_home.dart';
 import 'core/theme.dart';
 import 'screens/get_started_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/support_chat_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   await Api.I.init();
+  Api.I.onHttp402 = (retryRequest, serverMessage) => Http402Warning.show(
+    navigatorKey: PushNotifications.navigatorKey,
+    productionWebsite: AppConfig.productionWebsiteUri,
+    retryRequest: retryRequest,
+    serverMessage: serverMessage,
+    onContactAdministrator: () {
+      PushNotifications.navigatorKey.currentState?.push<void>(
+        MaterialPageRoute<void>(builder: (_) => const SupportChatScreen()),
+      );
+    },
+  );
   await AppThemeController.I.load();
   runApp(const KjmApp());
   WidgetsBinding.instance.addPostFrameCallback((_) {

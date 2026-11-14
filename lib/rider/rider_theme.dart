@@ -1,32 +1,32 @@
 import 'package:flutter/material.dart';
 
-/// Coffee, cream, and gold palette used by the Rider module.
-const riderGreen = Color(0xFF176B67);
-const riderCharcoal = Color(0xFF3A3028);
-const riderTeal = Color(0xFF168A83);
-const riderMutedTeal = Color(0xFFE3F1EF);
-const riderCoffee = Color(0xFF5A3828);
+/// Neutral coffee-shop palette shared by the Rider module.
+const riderGreen = Color(0xFF26734D);
+const riderCharcoal = Color(0xFF292725);
+const riderTeal = Color(0xFF176B67);
+const riderMutedTeal = Color(0xFFEAF2EF);
+const riderCoffee = Color(0xFF563927);
 const riderMediumBrown = Color(0xFF765039);
 const riderDeepCoffee = Color(0xFF402B20);
-const riderGold = Color(0xFFB58A55);
-const riderCream = Color(0xFFF5EBDD);
-const riderMutedBrown = Color(0xFF765039);
+const riderGold = Color(0xFF9A6D36);
+const riderCream = Color(0xFFF7F6F3);
+const riderMutedBrown = Color(0xFF716A64);
 
 ThemeData riderThemeData(BuildContext context) {
   final base = Theme.of(context);
   final dark = base.brightness == Brightness.dark;
-  final surface = dark ? const Color(0xFF241E19) : const Color(0xFFFFFCF7);
-  final raised = dark ? const Color(0xFF302720) : Colors.white;
+  final surface = dark ? const Color(0xFF211F1D) : const Color(0xFFF7F6F3);
+  final raised = dark ? const Color(0xFF2B2926) : Colors.white;
   final scheme = base.colorScheme.copyWith(
-    primary: dark ? riderGold : riderCoffee,
+    primary: dark ? const Color(0xFFD6B17A) : riderCoffee,
     onPrimary: dark ? const Color(0xFF241A13) : Colors.white,
-    secondary: riderMediumBrown,
+    secondary: riderMutedBrown,
     surface: surface,
     onSurface: dark ? riderCream : const Color(0xFF35261D),
     surfaceContainerHighest: dark
-        ? const Color(0xFF3A3028)
-        : const Color(0xFFEDE1D1),
-    outlineVariant: dark ? const Color(0xFF5E4C3F) : const Color(0xFFE2D3C1),
+        ? const Color(0xFF383532)
+        : const Color(0xFFECEAE6),
+    outlineVariant: dark ? const Color(0xFF494642) : const Color(0xFFE2E0DC),
   );
 
   return base.copyWith(
@@ -35,40 +35,40 @@ ThemeData riderThemeData(BuildContext context) {
       bodyColor: scheme.onSurface,
       displayColor: scheme.onSurface,
     ),
-    scaffoldBackgroundColor: dark ? const Color(0xFF1C1713) : riderCream,
+    scaffoldBackgroundColor: surface,
     appBarTheme: base.appBarTheme.copyWith(
-      backgroundColor: riderCoffee,
-      foregroundColor: riderCream,
-      iconTheme: const IconThemeData(color: riderCream),
-      titleTextStyle: const TextStyle(
-        color: riderCream,
+      backgroundColor: surface,
+      foregroundColor: scheme.onSurface,
+      iconTheme: IconThemeData(color: scheme.onSurface),
+      titleTextStyle: TextStyle(
+        color: scheme.onSurface,
         fontSize: 18,
         fontWeight: FontWeight.w800,
       ),
     ),
     cardTheme: base.cardTheme.copyWith(
       color: raised,
-      elevation: dark ? 1 : 2,
-      shadowColor: riderCoffee.withValues(alpha: .12),
+      elevation: 0,
+      shadowColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(19),
-        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: .75)),
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: scheme.outlineVariant),
       ),
     ),
     navigationBarTheme: base.navigationBarTheme.copyWith(
-      backgroundColor: dark ? riderCoffee : const Color(0xFFF0E5D6),
-      indicatorColor: riderGold.withValues(alpha: dark ? .32 : .27),
+      backgroundColor: raised,
+      indicatorColor: scheme.primary.withValues(alpha: dark ? .24 : .12),
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
           color: states.contains(WidgetState.selected)
-              ? (dark ? riderGold : riderCoffee)
+              ? scheme.primary
               : (dark ? Colors.white70 : riderMutedBrown),
         ),
       ),
       labelTextStyle: WidgetStateProperty.resolveWith(
         (states) => TextStyle(
           color: states.contains(WidgetState.selected)
-              ? (dark ? riderGold : riderCoffee)
+              ? scheme.primary
               : (dark ? Colors.white70 : riderMutedBrown),
           fontWeight: states.contains(WidgetState.selected)
               ? FontWeight.w700
@@ -141,7 +141,7 @@ class RiderImageBackground extends StatelessWidget {
     required this.child,
     this.image = 'assets/images/all.png',
     this.alignment = Alignment.topCenter,
-    this.enabled = true,
+    this.enabled = false,
   });
 
   final Widget child;
@@ -202,8 +202,8 @@ class RiderAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) => AppBar(
-    backgroundColor: riderCoffee,
-    foregroundColor: riderCream,
+    backgroundColor: Theme.of(context).colorScheme.surface,
+    foregroundColor: Theme.of(context).colorScheme.onSurface,
     automaticallyImplyLeading: false,
     leadingWidth: (showLogo ? 58 : 0) + (showBackButton ? 48 : 0),
     leading: Row(
@@ -222,8 +222,10 @@ class RiderAppBar extends StatelessWidget implements PreferredSizeWidget {
       title,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: Theme.of(context).textTheme.titleMedium
-          ?.copyWith(color: riderCream, fontWeight: FontWeight.w800),
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        color: Theme.of(context).colorScheme.onSurface,
+        fontWeight: FontWeight.w700,
+      ),
     ),
     centerTitle: false,
     actions: actions,

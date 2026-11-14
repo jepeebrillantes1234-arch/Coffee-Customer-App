@@ -144,13 +144,21 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
         _loading = false;
       });
 
-      final enRouteIds = active
-          .where((delivery) => delivery['status'] == 'on_the_way')
+      // Share the rider phone's actual location from assignment onward so
+      // customers can see the rider waiting at the shop before departure.
+      const gpsTrackingStatuses = {
+        'assigned',
+        'accepted',
+        'picked_up',
+        'on_the_way',
+      };
+      final activeDeliveryIds = active
+          .where((delivery) => gpsTrackingStatuses.contains(delivery['status']))
           .map((delivery) => delivery['id'])
           .whereType<num>()
           .map((id) => id.toInt())
           .toSet();
-      await LocationService.I.syncActiveDeliveries(enRouteIds);
+      await LocationService.I.syncActiveDeliveries(activeDeliveryIds);
       if (newAssignment != null && mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _showNewAssignment(newAssignment);
@@ -505,71 +513,61 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
 
   Widget _welcomeCard(String name) {
     final avatar = Api.I.user?['avatar_url']?.toString();
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: const BorderRadius.vertical(
-          bottom: Radius.circular(22),
-          top: Radius.circular(12),
-        ),
-        border: Border.all(color: riderGold.withValues(alpha: .5), width: 1.1),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [riderCoffee, riderMediumBrown],
-        ),
-      ),
-      child: Row(
-        children: [
-          Material(
-            color: Colors.transparent,
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: _openProfile,
-              child: CircleAvatar(
-                radius: 28,
-                backgroundColor: Colors.white.withValues(alpha: .18),
-                backgroundImage: avatar == null || avatar.isEmpty
-                    ? null
-                    : NetworkImage(avatar),
-                child: avatar == null || avatar.isEmpty
-                    ? const Icon(
-                        Icons.delivery_dining_rounded,
-                        color: Colors.white,
-                      )
-                    : null,
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: _openProfile,
+                child: CircleAvatar(
+                  radius: 28,
+                  backgroundColor: riderMutedTeal,
+                  backgroundImage: avatar == null || avatar.isEmpty
+                      ? null
+                      : NetworkImage(avatar),
+                  child: avatar == null || avatar.isEmpty
+                      ? const Icon(
+                          Icons.delivery_dining_rounded,
+                          color: riderCoffee,
+                        )
+                      : null,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Good day, $name',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Good day, $name',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: riderPrimaryText(context),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Delivery Rider',
-                  style: TextStyle(color: Colors.white.withValues(alpha: .85)),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    'Delivery Rider',
+                    style: TextStyle(color: riderSecondaryText(context)),
+                  ),
+                ],
+              ),
             ),
-          ),
-          _OnlineBadge(
-            online: _available,
-            label: _available ? 'ONLINE' : 'OFFLINE',
-          ),
-        ],
+            _OnlineBadge(
+              online: _available,
+              label: _available ? 'ONLINE' : 'OFFLINE',
+            ),
+          ],
+        ),
       ),
     );
   }
