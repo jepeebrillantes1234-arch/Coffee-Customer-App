@@ -73,7 +73,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.message;
+        _error = e.displayMessage;
         _loading = false;
       });
     } finally {
@@ -259,7 +259,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const KjmLoadingView(message: 'Loading your orders…')
           : RefreshIndicator(
               color: Theme.of(context).colorScheme.primary,
               onRefresh: _load,
@@ -348,27 +348,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ),
                   const SizedBox(height: 14),
                   if (_error != null && _orders.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 72),
-                      child: Center(
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.cloud_off_outlined,
-                              size: 42,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
-                            const SizedBox(height: 10),
-                            Text(_error!, textAlign: TextAlign.center),
-                            TextButton(
-                              onPressed: _load,
-                              child: const Text('Try again'),
-                            ),
-                          ],
-                        ),
-                      ),
+                    SizedBox(
+                      height: 360,
+                      child: KjmErrorState(message: _error, onRetry: _load),
                     )
                   else if (_visibleOrders.isEmpty)
                     Padding(

@@ -115,13 +115,13 @@ class _MembershipScreenState extends State<MembershipScreen>
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = error.message;
+        _error = error.displayMessage;
         _loading = false;
       });
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = 'Could not load membership details: $error';
+        _error = 'Could not load membership details. Please try again.';
         _loading = false;
       });
     }
@@ -144,8 +144,8 @@ class _MembershipScreenState extends State<MembershipScreen>
       }
     } on ApiException catch (error) {
       _message(error.message);
-    } catch (error) {
-      _message('Could not start membership payment: $error');
+    } catch (_) {
+      _message('Could not start membership payment. Please try again.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -261,23 +261,14 @@ class _MembershipScreenState extends State<MembershipScreen>
     return Scaffold(
       appBar: AppBar(title: const Text('Membership & Rewards')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const KjmLoadingView(message: 'Loading membership and rewards…')
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                 children: [
                   if (_error != null)
-                    Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.error_outline),
-                        title: Text(_error!),
-                        trailing: IconButton(
-                          onPressed: _load,
-                          icon: const Icon(Icons.refresh),
-                        ),
-                      ),
-                    ),
+                    KjmErrorNotice(message: _error!, onRetry: _load),
                   _membershipCard(colors),
                   const SizedBox(height: 14),
                   _cardDeliverySection(colors),

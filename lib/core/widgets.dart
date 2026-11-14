@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'config.dart';
 
+export 'error_ui.dart';
+
 String fixUrl(String? u) {
   if (u == null || u.isEmpty) return '';
   final raw = u.trim();

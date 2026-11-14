@@ -60,7 +60,7 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
       );
       if (mounted) Navigator.pop(context, true);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.displayMessage);
     } catch (_) {
       if (mounted) {
         setState(

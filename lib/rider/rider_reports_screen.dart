@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
+import '../core/error_ui.dart';
 import 'rider_theme.dart';
 
 /// Delivery report built from the authenticated rider history API.
@@ -50,7 +51,7 @@ class _RiderReportsScreenState extends State<RiderReportsScreen> {
     } on ApiException catch (error) {
       if (mounted) {
         setState(() {
-          _error = error.message;
+          _error = error.displayMessage;
           _loading = false;
         });
       }
@@ -189,14 +190,17 @@ class _RiderReportsScreenState extends State<RiderReportsScreen> {
         ),
         body: RiderImageBackground(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const KjmLoadingView(message: 'Loading delivery reports…')
+              : _error != null && _items.isEmpty
+              ? KjmErrorState(message: _error, onRetry: _load)
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
                     children: [
-                      if (_error != null) _errorCard(context, _error!),
+                      if (_error != null)
+                        KjmErrorNotice(message: _error!, onRetry: _load),
                       _periodSelector(context),
                       const SizedBox(height: 14),
                       Row(
@@ -506,17 +510,6 @@ class _RiderReportsScreenState extends State<RiderReportsScreen> {
       message,
       textAlign: TextAlign.center,
       style: TextStyle(color: riderSecondaryText(context)),
-    ),
-  );
-
-  Widget _errorCard(BuildContext context, String message) => Card(
-    color: Theme.of(context).colorScheme.errorContainer,
-    child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Text(
-        message,
-        style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
-      ),
     ),
   );
 }

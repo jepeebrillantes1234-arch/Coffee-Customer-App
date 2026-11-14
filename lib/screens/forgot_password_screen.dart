@@ -40,7 +40,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       await Api.I.forgotPassword(_email.text.trim());
       if (mounted) setState(() => _sent = true);
     } on ApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) setState(() => _error = error.displayMessage);
     } catch (_) {
       if (mounted) {
         setState(

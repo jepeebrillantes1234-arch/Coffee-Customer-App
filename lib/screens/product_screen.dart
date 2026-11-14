@@ -88,7 +88,7 @@ class _ProductScreenState extends State<ProductScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.message;
+        _error = e.displayMessage;
         _loading = false;
       });
     }
@@ -244,9 +244,9 @@ class _ProductScreenState extends State<ProductScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const KjmLoadingView(message: 'Loading product…')
           : p == null
-          ? Center(child: Text(_error ?? 'Something went wrong.'))
+          ? KjmErrorState(message: _error, onRetry: _load)
           : Column(
               children: [
                 Expanded(

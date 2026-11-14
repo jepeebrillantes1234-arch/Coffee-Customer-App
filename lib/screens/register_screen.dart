@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/api.dart';
+import '../core/error_ui.dart';
 import '../core/role_home.dart';
 import 'auth_screen.dart';
 
@@ -59,7 +60,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         (_) => false,
       );
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.displayMessage);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -245,7 +246,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 12),
-                      Text(_error!, style: const TextStyle(color: Colors.red)),
+                      KjmErrorNotice(message: _error!),
                     ],
                     const SizedBox(height: 20),
                     FilledButton(

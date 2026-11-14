@@ -67,7 +67,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         if (_conversation != null) await _refreshMessages();
       }
     } on ApiException catch (e) {
-      _error = e.message;
+      _error = e.displayMessage;
     } catch (_) {
       _error = 'Could not connect to customer service. Please try again.';
     } finally {
@@ -111,7 +111,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       });
       if (!silent) _scrollToEnd();
     } on ApiException catch (e) {
-      if (mounted && !silent) setState(() => _error = e.message);
+      if (mounted && !silent) setState(() => _error = e.displayMessage);
     } catch (_) {
       if (mounted && !silent) {
         setState(() => _error = 'Could not load the conversation.');
@@ -151,7 +151,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       await _refreshMessages();
       _startRefreshing();
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.displayMessage);
     } catch (_) {
       if (mounted) setState(() => _error = 'Could not start the support chat.');
     } finally {
@@ -236,7 +236,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       await _refreshMessages();
       _startRefreshing();
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.displayMessage);
     } catch (_) {
       if (mounted) {
         setState(

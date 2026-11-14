@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
+import '../core/error_ui.dart';
 import '../core/util.dart';
 
 class RefundHistoryScreen extends StatefulWidget {
@@ -30,7 +31,7 @@ class _RefundHistoryScreenState extends State<RefundHistoryScreen> {
           : await Api.I.refundRequestsForOrder(widget.orderId!);
       if (mounted) setState(() => _requests = requests);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.displayMessage);
     } catch (_) {
       if (mounted) {
         setState(() => _error = 'Refund history could not be loaded.');
@@ -64,14 +65,9 @@ class _RefundHistoryScreenState extends State<RefundHistoryScreen> {
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const KjmLoadingView(message: 'Loading refund history…')
           : _error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(_error!, textAlign: TextAlign.center),
-              ),
-            )
+          ? KjmErrorState(message: _error, onRetry: _load)
           : _requests.isEmpty
           ? Center(
               child: Padding(
@@ -128,15 +124,15 @@ class _RefundHistoryScreenState extends State<RefundHistoryScreen> {
                           ),
                           if (requestedAmount != null)
                             Text(
-                              'Requested: ${peso((num.tryParse('${requestedAmount}') ?? 0) / 100)}',
+                              'Requested: ${peso((num.tryParse('$requestedAmount') ?? 0) / 100)}',
                             ),
                           if (approvedAmount != null)
                             Text(
-                              'Approved: ${peso((num.tryParse('${approvedAmount}') ?? 0) / 100)}',
+                              'Approved: ${peso((num.tryParse('$approvedAmount') ?? 0) / 100)}',
                             ),
                           if (refundedAmount != null)
                             Text(
-                              'Refund confirmed: ${peso((num.tryParse('${refundedAmount}') ?? 0) / 100)}',
+                              'Refund confirmed: ${peso((num.tryParse('$refundedAmount') ?? 0) / 100)}',
                             ),
                           if ((request['explanation'] ?? '')
                               .toString()

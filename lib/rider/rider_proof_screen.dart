@@ -111,7 +111,7 @@ class _RiderProofScreenState extends State<RiderProofScreen> {
       );
       Navigator.of(context).pop(true);
     } on ApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) setState(() => _error = error.displayMessage);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

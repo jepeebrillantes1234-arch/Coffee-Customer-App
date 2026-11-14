@@ -60,7 +60,7 @@ class _MenuScreenState extends State<MenuScreen> {
         });
       }
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.displayMessage);
     }
     await _loadProducts();
   }
@@ -81,7 +81,7 @@ class _MenuScreenState extends State<MenuScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.message;
+        _error = e.displayMessage;
         _loading = false;
       });
     }
@@ -155,14 +155,16 @@ class _MenuScreenState extends State<MenuScreen> {
               ],
             ),
           ),
-          if (_error != null)
+          if (_error != null && _products.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               child: Text(_error!, style: const TextStyle(color: Colors.red)),
             ),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const KjmLoadingView(message: 'Loading menu…')
+                : _error != null
+                ? KjmErrorState(message: _error, onRetry: _loadProducts)
                 : RefreshIndicator(
                     onRefresh: _loadProducts,
                     child: _products.isEmpty

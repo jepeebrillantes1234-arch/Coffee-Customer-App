@@ -58,14 +58,14 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
     } on ApiException catch (error) {
       if (mounted) {
         setState(() {
-          _error = error.message;
+          _error = error.displayMessage;
           _loading = false;
         });
       }
-    } catch (error) {
+    } catch (_) {
       if (mounted) {
         setState(() {
-          _error = 'Could not load redeemable products: $error';
+          _error = 'Could not load redeemable products. Please try again.';
           _loading = false;
         });
       }
@@ -216,7 +216,9 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
       _message(error.message);
       await _load();
     } catch (error) {
-      _message('Could not redeem this product: $error');
+      _message(
+        'Could not redeem this product. Please check your points and try again.',
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -442,10 +444,12 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
           width: 54,
           height: 54,
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.1),
+            color: Theme.of(context).colorScheme.onPrimary
+                .withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(17),
             border: Border.all(
-              color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.3),
+              color: Theme.of(context).colorScheme.onPrimary
+                  .withValues(alpha: 0.3),
             ),
           ),
           child: Icon(
@@ -462,7 +466,8 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
               Text(
                 'AVAILABLE POINTS',
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.75),
+                  color: Theme.of(context).colorScheme.onPrimary
+                      .withValues(alpha: 0.75),
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1.3,
@@ -480,7 +485,11 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
               ),
               Text(
                 'points to enjoy your next reward',
-                style: TextStyle(color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.75), fontSize: 12),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onPrimary
+                      .withValues(alpha: 0.75),
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
@@ -496,7 +505,9 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
 
   Widget _membershipStatusCard() {
     final active = _active;
-    final accent = active ? Colors.green.shade700 : Theme.of(context).colorScheme.primary;
+    final accent = active
+        ? Colors.green.shade700
+        : Theme.of(context).colorScheme.primary;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -605,7 +616,10 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
         Text(
           message,
           textAlign: TextAlign.center,
-        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontSize: 13,
+          ),
         ),
       ],
     ),
@@ -631,7 +645,9 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
               children: [
                 if (image == null || image.isEmpty)
                   ColoredBox(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest,
                     child: Icon(
                       Icons.coffee_rounded,
                       size: 42,
@@ -654,10 +670,12 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
                       vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.92),
+                      color: Theme.of(context).colorScheme.primary
+                          .withValues(alpha: 0.92),
                       borderRadius: BorderRadius.circular(99),
                       border: Border.all(
-                        color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.75),
+                        color: Theme.of(context).colorScheme.onPrimary
+                            .withValues(alpha: 0.75),
                       ),
                     ),
                     child: Text(
@@ -734,7 +752,9 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
   Widget _stockBadge(dynamic stock, bool inStock) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
-      color: inStock ? Colors.green.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
+      color: inStock
+          ? Colors.green.withValues(alpha: 0.1)
+          : Colors.red.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(99),
       border: Border.all(
         color: inStock ? Colors.green.shade200 : Colors.red.shade200,
@@ -766,7 +786,9 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(13),
                   ),
                   child: Icon(
@@ -860,14 +882,21 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        Icon(
+          icon,
+          size: 14,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
         const SizedBox(width: 5),
         Flexible(
           child: Text(
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       ],

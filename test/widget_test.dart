@@ -3,11 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:coffee_customer/main.dart';
 
 void main() {
-  testWidgets('shows the KJM customer and rider login screen', (tester) async {
+  testWidgets('shows the KJM coffee splash branding', (tester) async {
     await tester.pumpWidget(const KjmApp());
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 3));
 
-    expect(find.text('Welcome sa KJM Coffee Brew'), findsOneWidget);
-    expect(find.text('Mag-login'), findsOneWidget);
+    expect(find.text('COFFEE SHOP'), findsOneWidget);
+    expect(find.text('Brewing coffee...'), findsNothing);
   });
 }

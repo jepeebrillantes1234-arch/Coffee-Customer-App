@@ -125,7 +125,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (!mounted) return;
       if (!silent) {
         setState(() {
-          _error = e.message;
+          _error = e.displayMessage;
           _loading = false;
         });
       }
@@ -422,9 +422,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const KjmLoadingView(message: 'Loading order details…')
           : o == null
-          ? Center(child: Text(_error ?? 'An error occurred.'))
+          ? KjmErrorState(message: _error, onRetry: _load)
           : _body(o, _t ?? {}),
     );
   }

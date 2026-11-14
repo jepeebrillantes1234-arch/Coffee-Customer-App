@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
+import '../core/error_ui.dart';
 import '../core/realtime.dart';
 import '../core/util.dart';
 import '../rider/rider_delivery_screen.dart';
@@ -64,7 +65,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.message;
+        _error = e.displayMessage;
         _loading = false;
       });
     }
@@ -285,32 +286,40 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               actions: [notificationAction],
             ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const KjmLoadingView(message: 'Loading notifications…')
           : RefreshIndicator(
               color: primary,
               onRefresh: _load,
               child: _items.isEmpty
-                  ? ListView(
-                      children: [
-                        const SizedBox(height: 140),
-                        Center(
-                          child: Column(
+                  ? _error != null
+                        ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
                             children: [
-                              Icon(
-                                Icons.notifications_none_rounded,
-                                size: 48,
-                                color: secondary,
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                _error ?? 'No notifications yet.',
-                                style: TextStyle(color: secondary),
+                              const SizedBox(height: 90),
+                              KjmErrorState(message: _error, onRetry: _load),
+                            ],
+                          )
+                        : ListView(
+                            children: [
+                              const SizedBox(height: 140),
+                              Center(
+                                child: Column(
+                                  children: [
+                                    Icon(
+                                      Icons.notifications_none_rounded,
+                                      size: 48,
+                                      color: secondary,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      _error ?? 'No notifications yet.',
+                                      style: TextStyle(color: secondary),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
-                          ),
-                        ),
-                      ],
-                    )
+                          )
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
                       itemCount: _items.length,

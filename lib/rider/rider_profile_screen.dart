@@ -94,7 +94,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
       _license.text = rider['license_no']?.toString() ?? '';
       _available = rider['is_available'] == true;
     } on ApiException catch (e) {
-      _error = e.message;
+      _error = e.displayMessage;
     } catch (_) {
       _error = 'Could not load your profile. Please try again.';
     } finally {
@@ -175,7 +175,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
       await Api.I.uploadAvatar(file.path);
       if (mounted) setState(() {});
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.displayMessage);
     } catch (_) {
       if (mounted) {
         setState(() => _error = 'Could not update your profile photo.');

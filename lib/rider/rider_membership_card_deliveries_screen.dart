@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
+import '../core/error_ui.dart';
 import 'rider_map_utils.dart';
 
 class RiderMembershipCardDeliveriesScreen extends StatefulWidget {
@@ -56,7 +57,7 @@ class _RiderMembershipCardDeliveriesScreenState
     } on ApiException catch (error) {
       if (mounted) {
         setState(() {
-          _error = error.message;
+          _error = error.displayMessage;
           _loading = false;
         });
       }
@@ -74,20 +75,33 @@ class _RiderMembershipCardDeliveriesScreenState
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Membership Card Deliveries')),
     body: _loading
-        ? const Center(child: CircularProgressIndicator())
+        ? const KjmLoadingView(message: 'Loading card deliveries…')
         : RefreshIndicator(
             onRefresh: _load,
             child: _items.isEmpty
-                ? ListView(
-                    children: [
-                      const SizedBox(height: 130),
-                      Center(
-                        child: Text(
-                          _error ?? 'No membership card deliveries are assigned to you.',
-                        ),
-                      ),
-                    ],
-                  )
+                ? _error != null
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            SizedBox(
+                              height: 430,
+                              child: KjmErrorState(
+                                message: _error,
+                                onRetry: _load,
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView(
+                          children: [
+                            const SizedBox(height: 130),
+                            Center(
+                              child: Text(
+                                _error ?? 'No membership card deliveries are assigned to you.',
+                              ),
+                            ),
+                          ],
+                        )
                 : ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: _items.length,
@@ -190,7 +204,7 @@ class _MembershipCardDeliveryDetailScreenState
     } on ApiException catch (error) {
       if (mounted) {
         setState(() {
-          _error = error.message;
+          _error = error.displayMessage;
           _loading = false;
         });
       }
@@ -401,9 +415,9 @@ class _MembershipCardDeliveryDetailScreenState
     return Scaffold(
       appBar: AppBar(title: const Text('Membership Card Delivery')),
       body: _loading && data == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const KjmLoadingView(message: 'Loading delivery details…')
           : _error != null && data == null
-          ? Center(child: Text(_error!))
+          ? KjmErrorState(message: _error, onRetry: _load)
           : Column(
               children: [
                 Expanded(

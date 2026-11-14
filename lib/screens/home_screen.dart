@@ -95,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
         bannersLoaded = true;
       } catch (error) {
         debugPrint('Public home banner request failed: $error');
-        bannerError = 'Could not load home banners: $error';
+        bannerError = 'Could not load home banners. Please try again.';
       }
 
       // Signed-in customers keep the existing audience filtering and payment config.
@@ -176,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.message;
+        _error = e.displayMessage;
         _loading = false;
         _bannerLoading = false;
         _bannerError = 'Could not load home banners: ${e.message}';
@@ -188,7 +188,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _error = 'Unable to load the Home screen. Pull down to retry.';
         _loading = false;
         _bannerLoading = false;
-        _bannerError = 'Unexpected error while loading banners: $error';
+        _bannerError =
+            'Unexpected error while loading banners. Please try again.';
       });
     }
   }

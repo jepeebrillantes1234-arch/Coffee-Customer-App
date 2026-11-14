@@ -47,7 +47,7 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.message;
+        _error = e.displayMessage;
         _loading = false;
       });
     }
@@ -72,17 +72,9 @@ class _OrderContentsScreenState extends State<OrderContentsScreen> {
         title: const Text('Order details'),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const KjmLoadingView(message: 'Loading order details…')
           : order == null
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(_error ?? 'Could not load order details.'),
-                  TextButton(onPressed: _load, child: const Text('Try again')),
-                ],
-              ),
-            )
+          ? KjmErrorState(message: _error, onRetry: _load)
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [

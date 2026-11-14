@@ -167,7 +167,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.message;
+        _error = e.displayMessage;
         _loading = false;
       });
       if (!Api.I.loggedIn) _goLogin();

@@ -107,7 +107,7 @@ class _RiderChatScreenState extends State<RiderChatScreen> {
     } on ApiException catch (error) {
       if (mounted) {
         setState(() {
-          _error = error.message;
+          _error = error.displayMessage;
           _loading = false;
         });
       }
@@ -142,7 +142,7 @@ class _RiderChatScreenState extends State<RiderChatScreen> {
       _replaceMessages(data);
       _scrollToBottom();
     } on ApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) setState(() => _error = error.displayMessage);
     } catch (_) {
       if (mounted) {
         setState(

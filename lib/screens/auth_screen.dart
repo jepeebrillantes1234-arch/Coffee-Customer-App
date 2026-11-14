@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/api.dart';
 import '../core/config.dart';
+import '../core/error_ui.dart';
 import '../core/role_home.dart';
 import 'register_screen.dart';
 import 'customer_service_sheet.dart';
@@ -62,7 +63,7 @@ class _AuthScreenState extends State<AuthScreen> {
         MaterialPageRoute(builder: (_) => homeForRole(Api.I.role)),
       );
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.displayMessage);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -125,7 +126,7 @@ class _AuthScreenState extends State<AuthScreen> {
         MaterialPageRoute(builder: (_) => homeForRole(Api.I.role)),
       );
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.displayMessage);
     } on GoogleSignInException catch (e, stackTrace) {
       debugPrint('Google sign-in failed (${e.code.name}): ${e.description}');
       debugPrintStack(stackTrace: stackTrace);
@@ -149,10 +150,13 @@ class _AuthScreenState extends State<AuthScreen> {
         );
       }
     } catch (e, stackTrace) {
-      debugPrint('Unhandled Google sign-in failure: $e');
+      debugPrint('Unhandled Google sign-in failure (${e.runtimeType}).');
       debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
-        setState(() => _error = 'Google sign-in failed: $e');
+        setState(
+          () => _error =
+              'Google sign-in could not be completed. Please try again.',
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -356,7 +360,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
                     if (_error != null) ...[
                       const SizedBox(height: 12),
-                      Text(_error!, style: const TextStyle(color: Colors.red)),
+                      KjmErrorNotice(message: _error!),
                     ],
                     const SizedBox(height: 20),
 

@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
+import '../core/error_ui.dart';
 import '../core/shop_map_marker.dart';
 import '../core/util.dart';
 import '../core/widgets.dart' show fixUrl;
@@ -55,8 +56,12 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
         _loading = false;
         if (!silent) _error = null;
       });
-      if (const {'assigned', 'accepted', 'picked_up', 'on_the_way'}
-          .contains(result['status'])) {
+      if (const {
+        'assigned',
+        'accepted',
+        'picked_up',
+        'on_the_way',
+      }.contains(result['status'])) {
         await LocationService.I.start(deliveryId: widget.id);
         _routeTimer ??= Timer.periodic(
           const Duration(seconds: 8),
@@ -70,7 +75,7 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
     } on ApiException catch (e) {
       if (mounted && !silent) {
         setState(() {
-          _error = e.message;
+          _error = e.displayMessage;
           _loading = false;
         });
       }
@@ -147,7 +152,7 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
         await _load();
       }
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.displayMessage);
     } catch (_) {
       if (mounted) {
         setState(
@@ -193,25 +198,12 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
       child: Scaffold(
         appBar: RiderAppBar(title: orderNumber ?? 'Delivery details'),
         body: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const KjmLoadingView(message: 'Loading delivery details…')
             : _delivery == null
             ? RiderImageBackground(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_error ?? 'Delivery not found.'),
-                        const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          onPressed: _load,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  ),
+                child: KjmErrorState(
+                  message: _error ?? 'Delivery not found.',
+                  onRetry: _load,
                 ),
               )
             : RefreshIndicator(onRefresh: _load, child: _content(_delivery!)),
@@ -249,7 +241,7 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
     final cod =
         order['payment_method'] == 'cod' && order['payment_status'] != 'paid';
     final details = <Widget>[
-      if (_error != null) _errorCard(_error!),
+      if (_error != null) KjmErrorNotice(message: _error!, onRetry: _load),
       _progress(status),
       if (status == 'on_the_way') _gpsStatus(),
       _customerCard(customer, order),
@@ -1083,16 +1075,6 @@ class _RiderDeliveryScreenState extends State<RiderDeliveryScreen> {
     ),
   );
 
-  Widget _errorCard(String text) => Card(
-    color: Theme.of(context).colorScheme.errorContainer,
-    child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Text(
-        text,
-        style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
-      ),
-    ),
-  );
 }
 
 class _StatusChip extends StatelessWidget {

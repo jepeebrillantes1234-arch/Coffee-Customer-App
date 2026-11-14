@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
+import '../core/error_ui.dart';
 import '../state/nav.dart';
 import '../state/promo_state.dart';
 import 'product_screen.dart';
@@ -42,7 +43,7 @@ class _PromosScreenState extends State<PromosScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.message;
+        _error = e.displayMessage;
         _loading = false;
       });
     } catch (e) {
@@ -218,19 +219,9 @@ class _PromosScreenState extends State<PromosScreen> {
       return ListView(
         physics: scroll,
         children: [
-          const SizedBox(height: 120),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(_error!, textAlign: TextAlign.center),
-            ),
-          ),
-          Center(
-            child: TextButton.icon(
-              onPressed: _load,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Try again'),
-            ),
+          SizedBox(
+            height: 520,
+            child: KjmErrorState(message: _error, onRetry: _load),
           ),
         ],
       );

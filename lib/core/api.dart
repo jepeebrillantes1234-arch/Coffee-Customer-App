@@ -10,7 +10,23 @@ import 'util.dart';
 class ApiException implements Exception {
   final String message;
   final int? statusCode;
-  ApiException(this.message, {this.statusCode});
+  final String title;
+  final String instruction;
+  final bool retryable;
+
+  ApiException(
+    this.message, {
+    this.statusCode,
+    this.title = 'Something went wrong',
+    this.instruction =
+        'Please try again. If the problem continues, contact support.',
+    this.retryable = false,
+  });
+
+  String get displayCode => statusCode?.toString() ?? 'N/A';
+  String get displayMessage =>
+      statusCode == null ? message : 'HTTP $statusCode: $message';
+
   @override
   String toString() => message;
 }
@@ -175,18 +191,24 @@ class Api {
       final data = res.data;
       if (data is Map) return Map<String, dynamic>.from(data);
       throw ApiException(
-        'The server returned invalid JSON. Check the URL in config.dart.',
+        'The server returned an unexpected response. Check your connection and try again.',
+        statusCode: res.statusCode,
+        title: 'Unexpected server response',
+        instruction: 'If this keeps happening, contact support.',
       );
     } on DioException catch (e) {
       final code = e.response?.statusCode;
       final d = e.response?.data;
-      debugPrint(
-        'API ERROR: $method $path | ${e.type} | status=$code | ${e.message} | ${e.error}',
-      );
+      debugPrint('API ERROR: $method $path | ${e.type} | status=$code');
 
       if (code == 401 && auth && tokenOverride == null) {
         await _save(null, null);
-        throw ApiException('Your session expired. Please log in again.');
+        throw ApiException(
+          'Your session expired. Please log in again.',
+          statusCode: 401,
+          title: 'Sign in again',
+          instruction: 'Your account is safe. Sign in again to continue.',
+        );
       }
       if (code == 402) {
         final providerMessage = d is Map
@@ -222,6 +244,9 @@ class Api {
         throw ApiException(
           'The request was rejected with HTTP 402 (Payment Required). A connection retry may help with a temporary gateway issue, but it will not resolve billing, payment, or account restrictions. Your request was not reported as successful.',
           statusCode: code,
+          title: 'Payment service requires attention',
+          instruction:
+              'Check the payment or order status before submitting again.',
         );
       }
       if (path.startsWith('/rider/deliveries/') &&
@@ -232,24 +257,219 @@ class Api {
         throw ApiException(
           'The connection is slow and the server response was not received. '
           'Your delivery may already be recorded. Keep this screen open and '
-          'submit again to safely check the result.',
+          'refresh the delivery status before taking another action.',
+          statusCode: 408,
+          title: 'Delivery update timed out',
+          instruction: 'Do not send the delivery update again until you have checked its current status.',
+          retryable: false,
         );
       }
-      if (d is Map) {
-        final errs = d['errors'];
-        if (errs is Map && errs.isNotEmpty) {
-          final first = errs.values.first;
+      if (code != null) throw _httpError(code, d);
+
+      switch (e.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.receiveTimeout:
+        case DioExceptionType.transformTimeout:
           throw ApiException(
-            first is List && first.isNotEmpty
-                ? first.first.toString()
-                : first.toString(),
+            'The server took too long to respond. Check the result before repeating the request.',
+            statusCode: 408,
+            title: 'Request timed out',
+            instruction: 'For an order or payment, check its status before submitting again.',
+            retryable: false,
           );
-        }
-        if (d['message'] != null) throw ApiException(d['message'].toString());
+        case DioExceptionType.connectionError:
+          throw ApiException(
+            'We could not reach the server. Check your internet connection and try again.',
+            title: 'Connection problem',
+            instruction: 'Reconnect to the internet, then retry the action when you are ready.',
+            retryable: true,
+          );
+        case DioExceptionType.cancel:
+          throw ApiException(
+            'The request was cancelled before it finished.',
+            title: 'Request cancelled',
+            instruction: 'You can start the action again when ready.',
+          );
+        case DioExceptionType.badCertificate:
+          throw ApiException(
+            'A secure connection to the server could not be established.',
+            title: 'Secure connection failed',
+            instruction: 'Please try again later or contact support.',
+          );
+        case DioExceptionType.badResponse:
+          throw ApiException(
+            'The server returned a response the app could not process.',
+            title: 'Unexpected server response',
+            instruction: 'Please try again later. Check the order status first for payments or orders.',
+          );
+        case DioExceptionType.unknown:
+          throw ApiException(
+            'The request could not be completed. Check your connection and try again.',
+            title: 'Request failed',
+            instruction: 'If the problem continues, contact support.',
+          );
       }
-      if (code != null) throw ApiException('Server error (status $code).');
+    } catch (error) {
+      if (error is ApiException) rethrow;
+      debugPrint(
+        'Unexpected API failure: $method $path | ${error.runtimeType}',
+      );
       throw ApiException(
-        'Could not connect to the server. Check the URL and your internet connection.',
+        'The request could not be completed. Please try again later.',
+        title: 'Unexpected error',
+        instruction: 'Your information was not changed by an automatic retry.',
+      );
+    }
+  }
+
+  ApiException _httpError(int status, dynamic body) {
+    String? serverMessage;
+    Map<String, dynamic>? validationErrors;
+    if (body is Map) {
+      final rawMessage = body['message']?.toString().trim();
+      if (rawMessage != null && rawMessage.isNotEmpty) {
+        serverMessage = rawMessage.length > 400
+            ? rawMessage.substring(0, 400)
+            : rawMessage;
+      }
+      final rawErrors = body['errors'];
+      if (rawErrors is Map) {
+        validationErrors = Map<String, dynamic>.from(rawErrors);
+      }
+    }
+
+    String? firstValidationMessage;
+    if (validationErrors != null && validationErrors.isNotEmpty) {
+      final first = validationErrors.values.first;
+      if (first is List && first.isNotEmpty) {
+        firstValidationMessage = first.first.toString();
+      } else if (first != null) {
+        firstValidationMessage = first.toString();
+      }
+    }
+
+    final (title, fallback, instruction, retryable) = switch (status) {
+      400 => (
+        'Request could not be understood',
+        'Check the information and try again.',
+        'Review the form before continuing.',
+        false,
+      ),
+      401 => (
+        'Sign in again',
+        'Your session expired. Please log in again.',
+        'Sign in again to continue.',
+        false,
+      ),
+      403 => (
+        'Access denied',
+        'You do not have permission to do that.',
+        'Return to your account home or contact support.',
+        false,
+      ),
+      404 => (
+        'Not found',
+        'We could not find what you requested.',
+        'Refresh the page or return to the previous screen.',
+        false,
+      ),
+      405 => (
+        'Action unavailable',
+        'This action is not supported.',
+        'Return to the previous screen and choose an available action.',
+        false,
+      ),
+      408 => (
+        'Request timed out',
+        'The server took too long to respond.',
+        'Check the result before repeating an order or payment.',
+        false,
+      ),
+      409 => (
+        'Information changed',
+        'This request conflicts with the latest information.',
+        'Refresh the screen and review the current status.',
+        false,
+      ),
+      413 => (
+        'File is too large',
+        'This file is too large to upload.',
+        'Choose a smaller file and try again.',
+        false,
+      ),
+      419 => (
+        'Session expired',
+        'This page has expired. Please refresh and try again.',
+        'Review the form before submitting again.',
+        false,
+      ),
+      422 => (
+        'Check your information',
+        'Some information needs your attention.',
+        'Review the highlighted fields and correct them.',
+        false,
+      ),
+      429 => (
+        'Please wait',
+        'Too many requests were sent. Wait a moment, then try again.',
+        'Wait for the limit to clear before trying again.',
+        true,
+      ),
+      502 => (
+        'Service interruption',
+        'A service interruption stopped this request.',
+        'Please wait a moment and check the result before retrying.',
+        true,
+      ),
+      503 => (
+        'Service unavailable',
+        'KJM Coffee Shop is temporarily unavailable.',
+        'Please wait a moment and try again.',
+        true,
+      ),
+      504 => (
+        'Request timed out',
+        'The service did not respond in time.',
+        'Check the order or payment status before submitting again.',
+        false,
+      ),
+      _ when status >= 500 => (
+        'Server error',
+        'Something went wrong on our side.',
+        'Please try again later. Check order status before repeating a submission.',
+        false,
+      ),
+      _ => (
+        'Request failed',
+        'The request could not be completed.',
+        'Review the information and try again.',
+        false,
+      ),
+    };
+    final message = switch (status) {
+      409 || 422 => firstValidationMessage ?? serverMessage ?? fallback,
+      400 => serverMessage ?? fallback,
+      _ => fallback,
+    };
+
+    return ApiException(
+      message,
+      statusCode: status,
+      title: title,
+      instruction: instruction,
+      retryable: retryable,
+    );
+  }
+
+  Future<MultipartFile> _uploadFile(String path, {String? filename}) async {
+    try {
+      return await MultipartFile.fromFile(path, filename: filename);
+    } catch (_) {
+      throw ApiException(
+        'The selected file could not be opened. Choose it again and retry.',
+        title: 'File upload failed',
+        instruction: 'Make sure the file is still available on your device.',
       );
     }
   }
@@ -362,7 +582,7 @@ class Api {
       if (body.trim().isNotEmpty) 'body': body.trim(),
       'order_id': ?orderId,
       if (attachmentPath != null)
-        'attachment': await MultipartFile.fromFile(attachmentPath),
+        'attachment': await _uploadFile(attachmentPath),
     });
     final path = guestUuid == null
         ? '/support/conversations/$conversationId/messages'
@@ -560,7 +780,7 @@ class Api {
       'explanation': explanation,
     });
     for (final path in photoPaths) {
-      form.files.add(MapEntry('photos[]', await MultipartFile.fromFile(path)));
+      form.files.add(MapEntry('photos[]', await _uploadFile(path)));
     }
     return Map<String, dynamic>.from(
       _d(await _call('POST', '/orders/$orderId/refund-requests', body: form))
@@ -760,7 +980,7 @@ class Api {
     Object body = fields;
     if (avatarPath != null) {
       fields['_method'] = 'PUT';
-      fields['avatar'] = await MultipartFile.fromFile(avatarPath);
+      fields['avatar'] = await _uploadFile(avatarPath);
       body = FormData.fromMap(fields);
       method = 'POST';
     }
@@ -1006,10 +1226,7 @@ class Api {
     void Function(int sent, int total)? onSendProgress,
   }) async {
     final form = FormData.fromMap({
-      'proof_photo': await MultipartFile.fromFile(
-        filePath,
-        filename: 'proof.jpg',
-      ),
+      'proof_photo': await _uploadFile(filePath, filename: 'proof.jpg'),
       if (cash != null) 'cash_collected': cash.toStringAsFixed(2),
     });
     await _call(
