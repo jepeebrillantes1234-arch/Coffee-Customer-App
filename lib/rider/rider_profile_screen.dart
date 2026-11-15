@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/api.dart';
+import '../core/error_ui.dart';
 import '../core/theme.dart';
 import '../screens/auth_screen.dart';
 import '../screens/customer_service_sheet.dart';
@@ -321,7 +322,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
         ),
         body: RiderImageBackground(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const KjmLoadingView()
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [

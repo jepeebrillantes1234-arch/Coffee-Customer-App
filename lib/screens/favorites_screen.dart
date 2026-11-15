@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/error_ui.dart';
 import '../state/favorites.dart';
 import 'menu_screen.dart';
 
@@ -69,31 +70,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         builder: (_, _) {
           final items = Favorites.I.items;
           if (Favorites.I.isLoading && items.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
+            return const KjmLoadingView();
           }
           if (Favorites.I.lastError != null && items.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      Favorites.I.lastError!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: Favorites.I.load,
-                      icon: const Icon(Icons.refresh_rounded),
-                      label: const Text('Try again'),
-                    ),
-                  ],
-                ),
-              ),
+            return KjmErrorState(
+              message: Favorites.I.lastError,
+              onRetry: Favorites.I.load,
             );
           }
           if (items.isEmpty) {

@@ -196,11 +196,9 @@ class _PromosScreenState extends State<PromosScreen> {
         physics: scroll,
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
         children: [
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(18),
-              child: CircularProgressIndicator(),
-            ),
+          const Padding(
+            padding: EdgeInsets.all(18),
+            child: KjmLoadingView(compact: true),
           ),
           for (var i = 0; i < 3; i++)
             Container(

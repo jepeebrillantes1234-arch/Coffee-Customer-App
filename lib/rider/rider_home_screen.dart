@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/api.dart';
+import '../core/error_ui.dart';
 import '../core/realtime.dart';
 import '../core/util.dart';
 import '../screens/auth_screen.dart';
@@ -365,7 +366,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
               ? 'assets/images/rider.png'
               : 'assets/images/all.png',
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const KjmLoadingView()
               : RefreshIndicator(onRefresh: _load, child: _buildPage()),
         ),
         bottomNavigationBar: NavigationBar(

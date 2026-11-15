@@ -3,47 +3,134 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'theme.dart';
 
-/// Shared loading treatment for customer and rider screens. The animation is
-/// local to the widget and never starts or repeats a network request.
+/// Shared KJM loading treatment for customer and rider screens.
+/// The animation is local to this widget and never starts a network request.
 class KjmLoadingView extends StatelessWidget {
-  const KjmLoadingView({
-    super.key,
-    this.message = 'Loading…',
-    this.compact = false,
-  });
+  const KjmLoadingView({super.key, this.message, this.compact = false});
 
-  final String message;
+  /// Retained for source compatibility; customer-facing copy is standardized.
+  final String? message;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final indicator = SizedBox(
-      width: compact ? 20 : 42,
-      height: compact ? 20 : 42,
-      child: const CircularProgressIndicator(strokeWidth: 3),
+      width: compact ? 24 : 42,
+      height: compact ? 24 : 42,
+      child: CircularProgressIndicator(
+        strokeWidth: compact ? 2.5 : 3,
+        color: const Color(0xFFC49A6C),
+        backgroundColor: scheme.outlineVariant,
+      ),
     );
 
-    if (compact) {
-      return Semantics(
-        liveRegion: true,
-        label: message,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [indicator, const SizedBox(width: 10), Text(message)],
+    final copy = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: compact
+          ? CrossAxisAlignment.start
+          : CrossAxisAlignment.center,
+      children: [
+        const Text('Loading...', style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4),
+        Text(
+          'Please wait while we load your page.',
+          textAlign: compact ? TextAlign.start : TextAlign.center,
+          style: TextStyle(color: scheme.onSurfaceVariant),
         ),
-      );
-    }
+      ],
+    );
 
-    return Center(
-      child: Semantics(
-        liveRegion: true,
-        label: message,
+    return Semantics(
+      liveRegion: true,
+      label: 'Loading... Please wait while we load your page.',
+      child: compact
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                indicator,
+                const SizedBox(width: 10),
+                Flexible(child: copy),
+              ],
+            )
+          : Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [indicator, const SizedBox(height: 14), copy],
+              ),
+            ),
+    );
+  }
+}
+
+/// Compact request failure feedback. Retry is available only when the caller
+/// supplies a safe, user-triggered request callback.
+class KjmErrorNotice extends StatelessWidget {
+  const KjmErrorNotice({
+    super.key,
+    required this.message,
+    this.onRetry,
+    this.onBack,
+  });
+
+  final String message;
+  final VoidCallback? onRetry;
+  final VoidCallback? onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    const canGoBack = true;
+    return Card(
+      color: scheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            indicator,
-            const SizedBox(height: 14),
-            Text(message, textAlign: TextAlign.center),
+            Row(
+              children: [
+                Icon(Icons.error_outline, color: scheme.error),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Unable to Load Page',
+                    style: TextStyle(
+                      color: scheme.onErrorContainer,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Something went wrong while loading this page. Would you like to try again?',
+              style: TextStyle(color: scheme.onErrorContainer),
+            ),
+            if (message.trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(message, style: TextStyle(color: scheme.onErrorContainer)),
+            ],
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (onRetry != null)
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Refresh'),
+                  ),
+                if (canGoBack)
+                  OutlinedButton.icon(
+                    onPressed: onBack ?? () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.arrow_back),
+                    label: const Text('Go Back'),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
@@ -51,9 +138,9 @@ class KjmLoadingView extends StatelessWidget {
   }
 }
 
-/// Responsive, reusable error state. Supplying [onRetry] is an explicit
-/// user-triggered action; callers should only provide it for safe requests.
-class KjmErrorState extends StatefulWidget {
+/// Full-page error state. A failed request never leaves an animated spinner
+/// running. Callers should pass a retry callback only for safe read requests.
+class KjmErrorState extends StatelessWidget {
   const KjmErrorState({
     super.key,
     this.exception,
@@ -74,155 +161,13 @@ class KjmErrorState extends StatefulWidget {
   final VoidCallback? onBack;
 
   @override
-  State<KjmErrorState> createState() => _KjmErrorStateState();
-}
-
-/// Compact animated error feedback for forms and screens that can preserve
-/// their current contents while showing a request failure.
-class KjmErrorNotice extends StatefulWidget {
-  const KjmErrorNotice({super.key, required this.message, this.onRetry});
-
-  final String message;
-  final VoidCallback? onRetry;
-
-  @override
-  State<KjmErrorNotice> createState() => _KjmErrorNoticeState();
-}
-
-class _KjmErrorNoticeState extends State<KjmErrorNotice>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _rotation = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1400),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _rotation.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final match = RegExp(r'^HTTP\s+(\d{3})\s*:\s*').firstMatch(widget.message);
-    final code = match?.group(1);
-    final message = widget.message.replaceFirst(
-      RegExp(r'^HTTP\s+\d{3}\s*:\s*'),
-      '',
-    );
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      color: scheme.errorContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            RotationTransition(
-              turns: _rotation,
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: scheme.error,
-                  backgroundColor: scheme.onErrorContainer.withValues(
-                    alpha: .12,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    code == null ? 'Request failed' : 'HTTP $code',
-                    style: TextStyle(
-                      color: scheme.onErrorContainer,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    message,
-                    style: TextStyle(color: scheme.onErrorContainer),
-                  ),
-                ],
-              ),
-            ),
-            if (widget.onRetry != null)
-              TextButton(onPressed: widget.onRetry, child: const Text('Retry')),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _KjmErrorStateState extends State<KjmErrorState>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _rotation = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1300),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _rotation.dispose();
-    super.dispose();
-  }
-
-  int? get _code {
-    if (widget.exception?.statusCode != null) {
-      return widget.exception!.statusCode;
-    }
-    if (widget.statusCode != null) return widget.statusCode;
-    final match = RegExp(r'^HTTP\s+(\d{3})\s*:')
-        .firstMatch(widget.message ?? '');
-    return match == null ? null : int.tryParse(match.group(1)!);
-  }
-
-  String get _message {
-    final value =
-        widget.exception?.message ??
-        widget.message ??
-        'The request could not be completed.';
-    return value.replaceFirst(RegExp(r'^HTTP\s+\d{3}\s*:\s*'), '');
-  }
-
-  String get _title {
-    if (widget.title != null) return widget.title!;
-    if (widget.exception != null) return widget.exception!.title;
-    return switch (_code) {
-      400 => 'Request could not be understood',
-      401 => 'Sign in again',
-      403 => 'Access denied',
-      404 => 'Not found',
-      405 => 'Action unavailable',
-      408 || 504 => 'Request timed out',
-      409 => 'Information changed',
-      413 => 'File upload failed',
-      419 => 'Session expired',
-      422 => 'Check your information',
-      429 => 'Please wait before trying again',
-      500 => 'Something went wrong',
-      502 => 'Service interruption',
-      503 => 'Service unavailable',
-      _ => 'Something went wrong',
-    };
-  }
-
-  String get _instruction =>
-      widget.instruction ??
-      widget.exception?.instruction ??
-      'Check your connection and try again. For an order or payment, check its status before submitting again.';
-
-  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final canGoBack = widget.onBack != null || Navigator.of(context).canPop();
+    final code = exception?.statusCode ?? statusCode;
+    final detail = message ?? exception?.message;
+    final recoveryHint = instruction ?? exception?.instruction;
+    final statusLabel = title ?? exception?.title;
+    const canGoBack = true;
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -241,66 +186,67 @@ class _KjmErrorStateState extends State<KjmErrorState>
                     errorBuilder: (_, _, _) =>
                         const Icon(Icons.coffee, size: 42, color: espresso),
                   ),
+                  const SizedBox(height: 16),
+                  Icon(Icons.error_outline, size: 44, color: scheme.error),
                   const SizedBox(height: 14),
-                  RotationTransition(
-                    turns: _rotation,
-                    child: SizedBox(
-                      width: 42,
-                      height: 42,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3,
-                        color: const Color(0xFFC49A6C),
-                        backgroundColor: scheme.outlineVariant,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
                   Text(
-                    _code?.toString() ?? '!',
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      color: const Color(0xFFC49A6C),
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _title,
+                    'Unable to Load Page',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleLarge
                         ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 10),
-                  Text(
-                    _message,
+                  const Text(
+                    'Something went wrong while loading this page. Would you like to try again?',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    _instruction,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: scheme.onSurfaceVariant),
-                  ),
+                  if (code != null ||
+                      statusLabel != null ||
+                      detail != null ||
+                      recoveryHint != null) ...[
+                    const SizedBox(height: 12),
+                    if (code != null || statusLabel != null)
+                      Text(
+                        [
+                          if (code != null) 'HTTP $code',
+                          ?statusLabel,
+                        ].join(' / '),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    if (detail != null && detail.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(detail, textAlign: TextAlign.center),
+                    ],
+                    if (recoveryHint != null &&
+                        recoveryHint.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        recoveryHint,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ],
                   const SizedBox(height: 22),
                   Wrap(
                     alignment: WrapAlignment.center,
                     spacing: 10,
                     runSpacing: 10,
                     children: [
-                      if (widget.onRetry != null)
+                      if (onRetry != null)
                         FilledButton.icon(
-                          onPressed: widget.onRetry,
+                          onPressed: onRetry,
                           icon: const Icon(Icons.refresh),
-                          label: const Text('Try again'),
+                          label: const Text('Refresh'),
                         ),
                       if (canGoBack)
                         OutlinedButton.icon(
                           onPressed:
-                              widget.onBack ??
-                              () => Navigator.of(context).maybePop(),
+                              onBack ?? () => Navigator.of(context).maybePop(),
                           icon: const Icon(Icons.arrow_back),
-                          label: const Text('Go back'),
+                          label: const Text('Go Back'),
                         ),
                     ],
                   ),

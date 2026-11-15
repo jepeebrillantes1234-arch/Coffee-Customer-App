@@ -324,7 +324,7 @@ class _RedeemPointsScreenState extends State<RedeemPointsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Redeem Points')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const KjmLoadingView()
           : RefreshIndicator(
               onRefresh: _load,
               child: LayoutBuilder(

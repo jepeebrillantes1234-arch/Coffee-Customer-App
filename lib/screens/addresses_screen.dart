@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api.dart';
 import '../core/reverse_geocoder.dart';
+import '../core/error_ui.dart';
 
 class AddressesScreen extends StatefulWidget {
   const AddressesScreen({super.key, this.selectionMode = false});
@@ -17,6 +18,7 @@ class AddressesScreen extends StatefulWidget {
 class _AddressesScreenState extends State<AddressesScreen> {
   List<Map<String, dynamic>> _items = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -25,14 +27,17 @@ class _AddressesScreenState extends State<AddressesScreen> {
   }
 
   Future<void> _load() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final items = await Api.I.addresses();
       if (mounted) setState(() => _items = items);
     } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
+      if (mounted) setState(() => _error = e.message);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -114,7 +119,9 @@ class _AddressesScreenState extends State<AddressesScreen> {
         label: const Text('Add address'),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const KjmLoadingView()
+          : _error != null
+          ? KjmErrorState(message: _error, onRetry: _load)
           : _items.isEmpty
           ? Center(
               child: Padding(

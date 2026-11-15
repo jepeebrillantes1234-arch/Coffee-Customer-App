@@ -118,7 +118,7 @@ void main() {
     },
   );
 
-  testWidgets('error state gives a readable code and rotating feedback', (
+  testWidgets('error state stops loading animation and offers recovery', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -134,31 +134,29 @@ void main() {
       ),
     );
 
-    expect(find.text('503'), findsOneWidget);
-    expect(find.text('Service unavailable'), findsOneWidget);
-    expect(find.text('Try again'), findsOneWidget);
-    final rotation = tester.widget<RotationTransition>(
-      find.byType(RotationTransition).first,
+    expect(find.text('Unable to Load Page'), findsOneWidget);
+    expect(
+      find.text(
+        'Something went wrong while loading this page. Would you like to try again?',
+      ),
+      findsOneWidget,
     );
-    final before = rotation.turns.value;
-    await tester.pump(const Duration(milliseconds: 200));
-    final after = tester
-        .widget<RotationTransition>(find.byType(RotationTransition).first)
-        .turns
-        .value;
-    expect(after, isNot(before));
+    expect(find.text('Refresh'), findsOneWidget);
+    expect(find.text('Go Back'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
-  testWidgets('loading view announces progress and displays a real spinner', (
+  testWidgets('loading view shows the standard copy and spinner', (
     tester,
   ) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(body: KjmLoadingView(message: 'Loading orders…')),
+        home: Scaffold(body: KjmLoadingView(message: 'Loading orders')),
       ),
     );
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    expect(find.text('Loading orders…'), findsOneWidget);
+    expect(find.text('Loading...'), findsOneWidget);
+    expect(find.text('Please wait while we load your page.'), findsOneWidget);
   });
 }
 

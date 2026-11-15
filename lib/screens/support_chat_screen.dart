@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/api.dart';
+import '../core/error_ui.dart';
 
 class SupportChatScreen extends StatefulWidget {
   const SupportChatScreen({super.key});
@@ -654,7 +655,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       ],
     ),
     body: _loading
-        ? const Center(child: CircularProgressIndicator())
+        ? const KjmLoadingView()
         : _conversation != null && _conversation?['status'] == 'closed'
         ? _closedConversation()
         : _conversation == null && _guest

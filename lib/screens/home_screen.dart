@@ -1065,7 +1065,7 @@ class _HomeScreenState extends State<HomeScreen> {
           if (_loading)
             const Padding(
               padding: EdgeInsets.all(20),
-              child: CircularProgressIndicator(),
+              child: KjmLoadingView(compact: true),
             )
           else
             SizedBox(

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/api.dart';
+import '../core/error_ui.dart';
 import '../core/realtime.dart';
 import '../rider/rider_theme.dart';
 
@@ -277,7 +278,7 @@ class _RiderChatScreenState extends State<RiderChatScreen> {
               ),
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const KjmLoadingView()
                   : _messages.isEmpty
                   ? Center(
                       child: Padding(
