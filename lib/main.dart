@@ -6,10 +6,12 @@ import 'package:flutter/material.dart';
 
 import 'core/api.dart';
 import 'core/config.dart';
+import 'core/error_ui.dart';
 import 'core/http_402_warning.dart';
 import 'core/push_notifications.dart';
 import 'core/role_home.dart';
 import 'core/theme.dart';
+import 'screens/auth_screen.dart';
 import 'screens/get_started_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/support_chat_screen.dart';
@@ -30,6 +32,23 @@ Future<void> main() async {
       );
     },
   );
+  Api.I.onSessionExpired = () async {
+    final navigator = PushNotifications.navigatorKey.currentState;
+    if (navigator == null) return;
+    unawaited(
+      navigator.pushAndRemoveUntil<void>(
+        MaterialPageRoute<void>(builder: (_) => const AuthScreen()),
+        (_) => false,
+      ),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PushNotifications.messengerKey.currentState?.showSnackBar(
+        const SnackBar(
+          content: Text('Your session expired. Please log in again.'),
+        ),
+      );
+    });
+  };
   await AppThemeController.I.load();
   runApp(const KjmApp());
   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -57,6 +76,9 @@ class KjmApp extends StatelessWidget {
               ? homeForRole(Api.I.role)
               : const GetStartedScreen(),
           onCompleted: PushNotifications.I.markNavigationReady,
+        ),
+        builder: (context, child) => KjmConnectionRecoveryOverlay(
+          child: child ?? const SizedBox.shrink(),
         ),
       ),
     );

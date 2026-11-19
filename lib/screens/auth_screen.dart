@@ -31,6 +31,9 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _remember = true;
   bool _busy = false;
   String? _error;
+  int? _errorStatusCode;
+  bool _showRequestRecovery = false;
+  VoidCallback? _retryAction;
 
   @override
   void initState() {
@@ -53,6 +56,9 @@ class _AuthScreenState extends State<AuthScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _errorStatusCode = null;
+      _showRequestRecovery = false;
+      _retryAction = null;
     });
     try {
       await Api.I.login(_username.text.trim(), _password.text);
@@ -63,7 +69,14 @@ class _AuthScreenState extends State<AuthScreen> {
         MaterialPageRoute(builder: (_) => homeForRole(Api.I.role)),
       );
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.displayMessage);
+      if (mounted) {
+        setState(() {
+          _error = e.displayMessage;
+          _errorStatusCode = e.statusCode;
+          _showRequestRecovery = _shouldShowRequestRecovery(e);
+          _retryAction = _showRequestRecovery ? _submit : null;
+        });
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -80,9 +93,13 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _signInWithGoogle() async {
+    var backendRequestStarted = false;
     setState(() {
       _busy = true;
       _error = null;
+      _errorStatusCode = null;
+      _showRequestRecovery = false;
+      _retryAction = null;
     });
     try {
       if (AppConfig.googleServerClientId.isEmpty) {
@@ -118,6 +135,7 @@ class _AuthScreenState extends State<AuthScreen> {
         throw ApiException('Firebase did not return a valid ID token.');
       }
 
+      backendRequestStarted = true;
       await Api.I.loginWithGoogle(firebaseIdToken);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('remember_me', true);
@@ -126,7 +144,15 @@ class _AuthScreenState extends State<AuthScreen> {
         MaterialPageRoute(builder: (_) => homeForRole(Api.I.role)),
       );
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.displayMessage);
+      if (mounted) {
+        setState(() {
+          _error = e.displayMessage;
+          _errorStatusCode = e.statusCode;
+          _showRequestRecovery =
+              backendRequestStarted && _shouldShowRequestRecovery(e);
+          _retryAction = _showRequestRecovery ? _signInWithGoogle : null;
+        });
+      }
     } on GoogleSignInException catch (e, stackTrace) {
       debugPrint('Google sign-in failed (${e.code.name}): ${e.description}');
       debugPrintStack(stackTrace: stackTrace);
@@ -358,9 +384,16 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ),
 
-                    if (_error != null) ...[
+                    if (_error != null && _showRequestRecovery) ...[
                       const SizedBox(height: 12),
-                      KjmErrorNotice(message: _error!),
+                      KjmErrorNotice(
+                        message: _error!,
+                        statusCode: _errorStatusCode,
+                        onRetry: _retryAction ?? _submit,
+                      ),
+                    ] else if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      KjmInlineError(message: _error!),
                     ],
                     const SizedBox(height: 20),
 
@@ -499,4 +532,17 @@ class _AuthScreenState extends State<AuthScreen> {
       ),
     );
   }
+}
+
+bool _shouldShowRequestRecovery(ApiException error) {
+  final status = error.statusCode;
+  if (status == null) return true;
+  return status == 404 ||
+      status == 408 ||
+      status == 419 ||
+      status == 429 ||
+      status == 500 ||
+      status == 502 ||
+      status == 503 ||
+      status == 504;
 }

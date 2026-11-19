@@ -51,9 +51,25 @@ class Api {
   Map<String, dynamic>? user;
   bool get loggedIn => _token != null;
   String? get accessToken => _token;
+  Map<String, String> get authenticatedHeaders => {
+    if (_token != null) 'Authorization': 'Bearer $_token',
+  };
   String? get role => user?['role']?.toString();
   Future<void> Function()? onAuthenticated;
   Future<void> Function()? onBeforeLogout;
+  Future<void> Function()? onSessionExpired;
+  bool _sessionExpiryHandled = false;
+  final ValueNotifier<bool> connectionRecoveryActive = ValueNotifier(false);
+  int _activeRecoveryRequests = 0;
+
+  @visibleForTesting
+  List<Duration> recoveryRetryDelaysForTesting = const [
+    Duration(seconds: 1),
+    Duration(seconds: 3),
+    Duration(seconds: 5),
+    Duration(seconds: 5),
+    Duration(seconds: 5),
+  ];
   Future<Map<String, dynamic>?> Function(
     Future<Map<String, dynamic>> Function()? retryRequest,
     String? serverMessage,
@@ -114,6 +130,7 @@ class Api {
     }
     _token = token;
     user = savedUser;
+    if (token != null) _sessionExpiryHandled = false;
     final p = await SharedPreferences.getInstance();
     if (token == null) {
       await p.remove('token');
@@ -166,10 +183,13 @@ class Api {
     bool auth = true,
     String? tokenOverride,
     Map<String, String>? extraHeaders,
+    Duration? connectTimeout,
     Duration? sendTimeout,
     Duration? receiveTimeout,
     void Function(int sent, int total)? onSendProgress,
     bool allow402Recovery = true,
+    bool handleSessionExpiry = true,
+    bool allowConnectionRecovery = true,
   }) async {
     final token = tokenOverride ?? _token;
     try {
@@ -179,6 +199,7 @@ class Api {
         queryParameters: query,
         options: Options(
           method: method,
+          connectTimeout: connectTimeout,
           sendTimeout: sendTimeout,
           receiveTimeout: receiveTimeout,
           headers: {
@@ -201,8 +222,17 @@ class Api {
       final d = e.response?.data;
       debugPrint('API ERROR: $method $path | ${e.type} | status=$code');
 
-      if (code == 401 && auth && tokenOverride == null) {
+      if (code == 401 &&
+          auth &&
+          tokenOverride == null &&
+          handleSessionExpiry &&
+          token != null &&
+          token == _token) {
         await _save(null, null);
+        if (!_sessionExpiryHandled) {
+          _sessionExpiryHandled = true;
+          await onSessionExpired?.call();
+        }
         throw ApiException(
           'Your session expired. Please log in again.',
           statusCode: 401,
@@ -234,6 +264,7 @@ class Api {
               receiveTimeout: receiveTimeout,
               onSendProgress: onSendProgress,
               allow402Recovery: false,
+              allowConnectionRecovery: false,
             ),
             serverMessage,
           );
@@ -264,52 +295,33 @@ class Api {
           retryable: false,
         );
       }
-      if (code != null) throw _httpError(code, d);
-
-      switch (e.type) {
-        case DioExceptionType.connectionTimeout:
-        case DioExceptionType.sendTimeout:
-        case DioExceptionType.receiveTimeout:
-        case DioExceptionType.transformTimeout:
-          throw ApiException(
-            'The server took too long to respond. Check the result before repeating the request.',
-            statusCode: 408,
-            title: 'Request timed out',
-            instruction: 'For an order or payment, check its status before submitting again.',
-            retryable: false,
-          );
-        case DioExceptionType.connectionError:
-          throw ApiException(
-            'We could not reach the server. Check your internet connection and try again.',
-            title: 'Connection problem',
-            instruction: 'Reconnect to the internet, then retry the action when you are ready.',
-            retryable: true,
-          );
-        case DioExceptionType.cancel:
-          throw ApiException(
-            'The request was cancelled before it finished.',
-            title: 'Request cancelled',
-            instruction: 'You can start the action again when ready.',
-          );
-        case DioExceptionType.badCertificate:
-          throw ApiException(
-            'A secure connection to the server could not be established.',
-            title: 'Secure connection failed',
-            instruction: 'Please try again later or contact support.',
-          );
-        case DioExceptionType.badResponse:
-          throw ApiException(
-            'The server returned a response the app could not process.',
-            title: 'Unexpected server response',
-            instruction: 'Please try again later. Check the order status first for payments or orders.',
-          );
-        case DioExceptionType.unknown:
-          throw ApiException(
-            'The request could not be completed. Check your connection and try again.',
-            title: 'Request failed',
-            instruction: 'If the problem continues, contact support.',
-          );
+      final failure = code == null ? _networkError(e) : _httpError(code, d);
+      final retryableRead =
+          method.toUpperCase() == 'GET' &&
+          allowConnectionRecovery &&
+          _isTransientReadFailure(e, code);
+      if (retryableRead) {
+        final recovered = await _retryRead(
+          () => _call(
+            method,
+            path,
+            body: body,
+            query: query,
+            auth: auth,
+            tokenOverride: token,
+            extraHeaders: extraHeaders,
+            connectTimeout: const Duration(seconds: 3),
+            sendTimeout: const Duration(seconds: 4),
+            receiveTimeout: const Duration(seconds: 5),
+            onSendProgress: onSendProgress,
+            allow402Recovery: false,
+            handleSessionExpiry: handleSessionExpiry,
+            allowConnectionRecovery: false,
+          ),
+        );
+        if (recovered != null) return recovered;
       }
+      throw failure;
     } catch (error) {
       if (error is ApiException) rethrow;
       debugPrint(
@@ -320,6 +332,86 @@ class Api {
         title: 'Unexpected error',
         instruction: 'Your information was not changed by an automatic retry.',
       );
+    }
+  }
+
+  bool _isTransientReadFailure(DioException error, int? statusCode) {
+    if (statusCode != null) {
+      return const {408, 500, 502, 503, 504}.contains(statusCode);
+    }
+    return const {
+      DioExceptionType.connectionError,
+      DioExceptionType.connectionTimeout,
+      DioExceptionType.sendTimeout,
+      DioExceptionType.receiveTimeout,
+    }.contains(error.type);
+  }
+
+  Future<Map<String, dynamic>?> _retryRead(
+    Future<Map<String, dynamic>> Function() request,
+  ) async {
+    _activeRecoveryRequests++;
+    connectionRecoveryActive.value = true;
+    try {
+      for (final delay in recoveryRetryDelaysForTesting) {
+        if (delay > Duration.zero) await Future<void>.delayed(delay);
+        try {
+          return await request();
+        } on ApiException {
+          // Keep the recovery screen visible between bounded read retries.
+        }
+      }
+      return null;
+    } finally {
+      _activeRecoveryRequests--;
+      connectionRecoveryActive.value = _activeRecoveryRequests > 0;
+    }
+  }
+
+  ApiException _networkError(DioException error) {
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.transformTimeout:
+        return ApiException(
+          'The server took too long to respond. Check the result before repeating the request.',
+          statusCode: 408,
+          title: 'Request timed out',
+          instruction: 'For an order or payment, check its status before submitting again.',
+          retryable: false,
+        );
+      case DioExceptionType.connectionError:
+        return ApiException(
+          'We could not reach the server. Check your internet connection and try again.',
+          title: 'Connection problem',
+          instruction: 'Reconnect to the internet, then retry the action when you are ready.',
+          retryable: true,
+        );
+      case DioExceptionType.cancel:
+        return ApiException(
+          'The request was cancelled before it finished.',
+          title: 'Request cancelled',
+          instruction: 'You can start the action again when ready.',
+        );
+      case DioExceptionType.badCertificate:
+        return ApiException(
+          'A secure connection to the server could not be established.',
+          title: 'Secure connection failed',
+          instruction: 'Please try again later or contact support.',
+        );
+      case DioExceptionType.badResponse:
+        return ApiException(
+          'The server returned a response the app could not process.',
+          title: 'Unexpected server response',
+          instruction: 'Please try again later. Check the order status first for payments or orders.',
+        );
+      case DioExceptionType.unknown:
+        return ApiException(
+          'The request could not be completed. Check your connection and try again.',
+          title: 'Request failed',
+          instruction: 'If the problem continues, contact support.',
+        );
     }
   }
 
@@ -636,7 +728,7 @@ class Api {
       await onBeforeLogout?.call();
     } catch (_) {}
     try {
-      await _call('POST', '/auth/logout');
+      await _call('POST', '/auth/logout', handleSessionExpiry: false);
     } catch (_) {}
     await _save(null, null);
   }
@@ -738,29 +830,52 @@ class Api {
 
   Future<Map<String, dynamic>> sendCustomerRiderChatMessage({
     required int orderId,
-    required String body,
-  }) async => Map<String, dynamic>.from(
-    _d(
-      await _call(
-        'POST',
-        '/orders/$orderId/rider-chat/messages',
-        body: {'body': body},
-      ),
-    ) as Map,
-  );
+    String? body,
+    required String clientMessageId,
+    String? imagePath,
+  }) async {
+    final payload = await _sendRiderChatMessage(
+      '/orders/$orderId/rider-chat/messages',
+      body: body,
+      clientMessageId: clientMessageId,
+      imagePath: imagePath,
+    );
+    return Map<String, dynamic>.from(_d(payload) as Map);
+  }
 
   Future<Map<String, dynamic>> sendRiderChatMessage({
     required int deliveryId,
-    required String body,
-  }) async => Map<String, dynamic>.from(
-    _d(
-      await _call(
-        'POST',
-        '/rider/deliveries/$deliveryId/chat/messages',
-        body: {'body': body},
-      ),
-    ) as Map,
-  );
+    String? body,
+    required String clientMessageId,
+    String? imagePath,
+  }) async {
+    final payload = await _sendRiderChatMessage(
+      '/rider/deliveries/$deliveryId/chat/messages',
+      body: body,
+      clientMessageId: clientMessageId,
+      imagePath: imagePath,
+    );
+    return Map<String, dynamic>.from(_d(payload) as Map);
+  }
+
+  Future<Map<String, dynamic>> _sendRiderChatMessage(
+    String path, {
+    String? body,
+    required String clientMessageId,
+    String? imagePath,
+  }) async {
+    Object data;
+    if (imagePath != null) {
+      data = FormData.fromMap({
+        if (body != null && body.trim().isNotEmpty) 'body': body.trim(),
+        'client_message_id': clientMessageId,
+        'attachment': await _uploadFile(imagePath),
+      });
+    } else {
+      data = {'body': body?.trim() ?? '', 'client_message_id': clientMessageId};
+    }
+    return _call('POST', path, body: data);
+  }
 
   Future<Map<String, dynamic>> cancel(int id, {required String reason}) async {
     return Map<String, dynamic>.from(

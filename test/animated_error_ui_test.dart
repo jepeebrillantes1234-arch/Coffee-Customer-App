@@ -42,12 +42,21 @@ void main() {
   setUp(() {
     previousAdapter = Api.I.httpClientAdapterForTesting;
     Api.I.onHttp402 = null;
+    Api.I.recoveryRetryDelaysForTesting = const [];
+    Api.I.connectionRecoveryActive.value = false;
     SharedPreferences.setMockInitialValues({});
   });
 
   tearDown(() {
     Api.I.onHttp402 = null;
     Api.I.httpClientAdapterForTesting = previousAdapter;
+    Api.I.recoveryRetryDelaysForTesting = const [
+      Duration(seconds: 1),
+      Duration(seconds: 3),
+      Duration(seconds: 5),
+      Duration(seconds: 5),
+      Duration(seconds: 5),
+    ];
   });
 
   for (final status in <int>[
@@ -146,17 +155,53 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
-  testWidgets('loading view shows the standard copy and spinner', (
+  testWidgets('loading view uses only the rotating logo and compact label', (
     tester,
   ) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(body: KjmLoadingView(message: 'Loading orders')),
+        home: Scaffold(
+          body: KjmLoadingView(
+            message: 'Loading orders',
+            connectionRecovery: true,
+          ),
+        ),
       ),
     );
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(find.text('Loading...'), findsOneWidget);
-    expect(find.text('Please wait while we load your page.'), findsOneWidget);
+    expect(find.text('Please wait while we load your page.'), findsNothing);
+    expect(find.byType(Card), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            widget.image is AssetImage &&
+            (widget.image as AssetImage).assetName == 'assets/images/logo1.png',
+      ),
+      findsOneWidget,
+    );
+    final rotationFinder = find.descendant(
+      of: find.byType(KjmLoadingView),
+      matching: find.byType(RotationTransition),
+    );
+    expect(rotationFinder, findsOneWidget);
+    expect(find.byIcon(Icons.coffee), findsNothing);
+    final rotation = tester.widget<RotationTransition>(rotationFinder);
+    final initialTurn = rotation.turns.value;
+    await tester.pump(const Duration(milliseconds: 450));
+    expect(rotation.turns.value, greaterThan(initialTurn));
+
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: Text('Done'))),
+    );
+    expect(
+      find.descendant(
+        of: find.byType(KjmLoadingView),
+        matching: find.byType(RotationTransition),
+      ),
+      findsNothing,
+    );
+    expect(tester.binding.transientCallbackCount, 0);
   });
 }
 

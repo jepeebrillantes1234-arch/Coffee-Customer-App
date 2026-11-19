@@ -1,66 +1,142 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
-import 'theme.dart';
 
 /// Shared KJM loading treatment for customer and rider screens.
 /// The animation is local to this widget and never starts a network request.
 class KjmLoadingView extends StatelessWidget {
-  const KjmLoadingView({super.key, this.message, this.compact = false});
+  const KjmLoadingView({
+    super.key,
+    this.message,
+    this.compact = false,
+    this.connectionRecovery = false,
+  });
 
   /// Retained for source compatibility; customer-facing copy is standardized.
   final String? message;
   final bool compact;
+  final bool connectionRecovery;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final indicator = SizedBox(
-      width: compact ? 24 : 42,
-      height: compact ? 24 : 42,
-      child: CircularProgressIndicator(
-        strokeWidth: compact ? 2.5 : 3,
-        color: const Color(0xFFC49A6C),
-        backgroundColor: scheme.outlineVariant,
-      ),
-    );
-
-    final copy = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: compact
-          ? CrossAxisAlignment.start
-          : CrossAxisAlignment.center,
-      children: [
-        const Text('Loading...', style: TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 4),
-        Text(
-          'Please wait while we load your page.',
-          textAlign: compact ? TextAlign.start : TextAlign.center,
-          style: TextStyle(color: scheme.onSurfaceVariant),
-        ),
-      ],
-    );
+    if (!connectionRecovery) {
+      return compact
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Center(child: CircularProgressIndicator());
+    }
 
     return Semantics(
       liveRegion: true,
-      label: 'Loading... Please wait while we load your page.',
+      label: message == null ? 'Loading...' : 'Loading... $message',
       child: compact
           ? Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                indicator,
-                const SizedBox(width: 10),
-                Flexible(child: copy),
+                _AnimatedKjmLogo(size: 34),
+                const SizedBox(width: 8),
+                Text(
+                  'Loading...',
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             )
           : Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: [indicator, const SizedBox(height: 14), copy],
+                children: [
+                  _AnimatedKjmLogo(size: 58),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Loading...',
+                    style: TextStyle(
+                      color: scheme.onSurfaceVariant,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
     );
   }
+}
+
+/// Shows the logo recovery screen only while Api is retrying a safe read after
+/// a transient connection or server failure. Ordinary screen loads use local
+/// indicators and do not activate this overlay.
+class KjmConnectionRecoveryOverlay extends StatelessWidget {
+  const KjmConnectionRecoveryOverlay({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: Api.I.connectionRecoveryActive,
+    builder: (context, recovering, _) {
+      if (!recovering) return child;
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          child,
+          Positioned.fill(
+            child: ColoredBox(
+              color: Theme.of(context).colorScheme.surface.withAlpha(245),
+              child: const KjmLoadingView(connectionRecovery: true),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+class _AnimatedKjmLogo extends StatefulWidget {
+  const _AnimatedKjmLogo({required this.size});
+
+  final double size;
+
+  @override
+  State<_AnimatedKjmLogo> createState() => _AnimatedKjmLogoState();
+}
+
+class _AnimatedKjmLogoState extends State<_AnimatedKjmLogo>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RotationTransition(
+    turns: _controller,
+    child: Image.asset(
+      'assets/images/logo1.png',
+      width: widget.size,
+      height: widget.size,
+      fit: BoxFit.contain,
+    ),
+  );
 }
 
 /// Compact request failure feedback. Retry is available only when the caller
@@ -69,18 +145,19 @@ class KjmErrorNotice extends StatelessWidget {
   const KjmErrorNotice({
     super.key,
     required this.message,
-    this.onRetry,
+    required this.onRetry,
     this.onBack,
+    this.statusCode,
   });
 
   final String message;
-  final VoidCallback? onRetry;
+  final VoidCallback onRetry;
   final VoidCallback? onBack;
+  final int? statusCode;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    const canGoBack = true;
     return Card(
       color: scheme.errorContainer,
       child: Padding(
@@ -108,27 +185,28 @@ class KjmErrorNotice extends StatelessWidget {
               'Something went wrong while loading this page. Would you like to try again?',
               style: TextStyle(color: scheme.onErrorContainer),
             ),
-            if (message.trim().isNotEmpty) ...[
+            if (statusCode != null) ...[
               const SizedBox(height: 6),
-              Text(message, style: TextStyle(color: scheme.onErrorContainer)),
+              Text(
+                'HTTP $statusCode',
+                style: TextStyle(color: scheme.onErrorContainer),
+              ),
             ],
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                if (onRetry != null)
-                  FilledButton.icon(
-                    onPressed: onRetry,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Refresh'),
-                  ),
-                if (canGoBack)
-                  OutlinedButton.icon(
-                    onPressed: onBack ?? () => Navigator.of(context).maybePop(),
-                    icon: const Icon(Icons.arrow_back),
-                    label: const Text('Go Back'),
-                  ),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Refresh'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onBack ?? () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Go Back'),
+                ),
               ],
             ),
           ],
@@ -148,7 +226,7 @@ class KjmErrorState extends StatelessWidget {
     this.statusCode,
     this.title,
     this.instruction,
-    this.onRetry,
+    required this.onRetry,
     this.onBack,
   });
 
@@ -157,17 +235,14 @@ class KjmErrorState extends StatelessWidget {
   final int? statusCode;
   final String? title;
   final String? instruction;
-  final VoidCallback? onRetry;
+  final VoidCallback onRetry;
   final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final code = exception?.statusCode ?? statusCode;
-    final detail = message ?? exception?.message;
-    final recoveryHint = instruction ?? exception?.instruction;
-    final statusLabel = title ?? exception?.title;
-    const canGoBack = true;
+    final effectiveCode = code ?? statusCode;
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -175,20 +250,12 @@ class KjmErrorState extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 520),
           child: Card(
             child: Padding(
-              padding: const EdgeInsets.all(28),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Image.asset(
-                    'assets/images/logo1.png',
-                    width: 54,
-                    height: 54,
-                    errorBuilder: (_, _, _) =>
-                        const Icon(Icons.coffee, size: 42, color: espresso),
-                  ),
-                  const SizedBox(height: 16),
-                  Icon(Icons.error_outline, size: 44, color: scheme.error),
-                  const SizedBox(height: 14),
+                  Icon(Icons.error_outline, size: 34, color: scheme.error),
+                  const SizedBox(height: 10),
                   Text(
                     'Unable to Load Page',
                     textAlign: TextAlign.center,
@@ -200,34 +267,9 @@ class KjmErrorState extends StatelessWidget {
                     'Something went wrong while loading this page. Would you like to try again?',
                     textAlign: TextAlign.center,
                   ),
-                  if (code != null ||
-                      statusLabel != null ||
-                      detail != null ||
-                      recoveryHint != null) ...[
+                  if (effectiveCode != null) ...[
                     const SizedBox(height: 12),
-                    if (code != null || statusLabel != null)
-                      Text(
-                        [
-                          if (code != null) 'HTTP $code',
-                          ?statusLabel,
-                        ].join(' / '),
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                    if (detail != null && detail.trim().isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(detail, textAlign: TextAlign.center),
-                    ],
-                    if (recoveryHint != null &&
-                        recoveryHint.trim().isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        recoveryHint,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: scheme.onSurfaceVariant),
-                      ),
-                    ],
+                    Text('HTTP $effectiveCode', textAlign: TextAlign.center),
                   ],
                   const SizedBox(height: 22),
                   Wrap(
@@ -235,28 +277,18 @@ class KjmErrorState extends StatelessWidget {
                     spacing: 10,
                     runSpacing: 10,
                     children: [
-                      if (onRetry != null)
-                        FilledButton.icon(
-                          onPressed: onRetry,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Refresh'),
-                        ),
-                      if (canGoBack)
-                        OutlinedButton.icon(
-                          onPressed:
-                              onBack ?? () => Navigator.of(context).maybePop(),
-                          icon: const Icon(Icons.arrow_back),
-                          label: const Text('Go Back'),
-                        ),
+                      FilledButton.icon(
+                        onPressed: onRetry,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Refresh'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed:
+                            onBack ?? () => Navigator.of(context).maybePop(),
+                        icon: const Icon(Icons.arrow_back),
+                        label: const Text('Go Back'),
+                      ),
                     ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'KJM Coffee Shop',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: espresso,
-                      fontWeight: FontWeight.w700,
-                    ),
                   ),
                 ],
               ),
@@ -264,6 +296,23 @@ class KjmErrorState extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Form errors are not page-load errors: preserve their original messages and
+/// field validation flow without showing recovery controls that could resubmit.
+class KjmInlineError extends StatelessWidget {
+  const KjmInlineError({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      liveRegion: true,
+      child: Text(message, style: TextStyle(color: scheme.error)),
     );
   }
 }

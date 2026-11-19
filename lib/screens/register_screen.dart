@@ -25,6 +25,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _hideConfirmation = true;
   bool _busy = false;
   String? _error;
+  int? _errorStatusCode;
+  bool _showRequestRecovery = false;
 
   @override
   void dispose() {
@@ -42,6 +44,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _errorStatusCode = null;
+      _showRequestRecovery = false;
     });
     try {
       await Api.I.register(
@@ -60,7 +64,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
         (_) => false,
       );
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.displayMessage);
+      if (mounted) {
+        setState(() {
+          _error = e.displayMessage;
+          _errorStatusCode = e.statusCode;
+          _showRequestRecovery = _shouldShowRequestRecovery(e);
+        });
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -244,9 +254,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ? 'Passwords do not match.'
                           : null,
                     ),
-                    if (_error != null) ...[
+                    if (_error != null && _showRequestRecovery) ...[
                       const SizedBox(height: 12),
-                      KjmErrorNotice(message: _error!),
+                      KjmErrorNotice(
+                        message: _error!,
+                        statusCode: _errorStatusCode,
+                        onRetry: _submit,
+                      ),
+                    ] else if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      KjmInlineError(message: _error!),
                     ],
                     const SizedBox(height: 20),
                     FilledButton(
@@ -291,4 +308,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
     );
   }
+}
+
+bool _shouldShowRequestRecovery(ApiException error) {
+  final status = error.statusCode;
+  if (status == null) return true;
+  return status == 404 ||
+      status == 408 ||
+      status == 419 ||
+      status == 429 ||
+      status == 500 ||
+      status == 502 ||
+      status == 503 ||
+      status == 504;
 }

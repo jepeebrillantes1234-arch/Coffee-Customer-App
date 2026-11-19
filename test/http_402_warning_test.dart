@@ -56,11 +56,19 @@ void main() {
   setUp(() {
     previousAdapter = Api.I.httpClientAdapterForTesting;
     Api.I.onHttp402 = null;
+    Api.I.recoveryRetryDelaysForTesting = const [];
   });
 
   tearDown(() {
     Api.I.onHttp402 = null;
     Api.I.httpClientAdapterForTesting = previousAdapter;
+    Api.I.recoveryRetryDelaysForTesting = const [
+      Duration(seconds: 1),
+      Duration(seconds: 3),
+      Duration(seconds: 5),
+      Duration(seconds: 5),
+      Duration(seconds: 5),
+    ];
   });
 
   Future<void> mountWarning(
