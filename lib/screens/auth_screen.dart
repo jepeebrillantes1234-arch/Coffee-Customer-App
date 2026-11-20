@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -34,6 +36,9 @@ class _AuthScreenState extends State<AuthScreen> {
   int? _errorStatusCode;
   bool _showRequestRecovery = false;
   VoidCallback? _retryAction;
+  Timer? _lockoutTimer;
+  int _lockoutRemainingSeconds = 0;
+  bool _passwordResetRequired = false;
 
   @override
   void initState() {
@@ -48,10 +53,12 @@ class _AuthScreenState extends State<AuthScreen> {
     _username.dispose();
     _email.dispose();
     _password.dispose();
+    _lockoutTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    if (_busy || _lockoutRemainingSeconds > 0 || _passwordResetRequired) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() {
       _busy = true;
@@ -73,8 +80,10 @@ class _AuthScreenState extends State<AuthScreen> {
         setState(() {
           _error = e.displayMessage;
           _errorStatusCode = e.statusCode;
-          _showRequestRecovery = _shouldShowRequestRecovery(e);
+          _showRequestRecovery =
+              e.securityStatus == null && _shouldShowRequestRecovery(e);
           _retryAction = _showRequestRecovery ? _submit : null;
+          _applySecurityState(e);
         });
       }
     } finally {
@@ -90,9 +99,22 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       ),
     );
+    if (!mounted) return;
+    _lockoutTimer?.cancel();
+    setState(() {
+      // The backend remains authoritative if the user returned without
+      // completing the reset; it will send the forced-reset response again.
+      _passwordResetRequired = false;
+      _lockoutRemainingSeconds = 0;
+      _error = null;
+      _errorStatusCode = null;
+      _showRequestRecovery = false;
+      _retryAction = null;
+    });
   }
 
   Future<void> _signInWithGoogle() async {
+    if (_busy || _lockoutRemainingSeconds > 0 || _passwordResetRequired) return;
     var backendRequestStarted = false;
     setState(() {
       _busy = true;
@@ -149,8 +171,11 @@ class _AuthScreenState extends State<AuthScreen> {
           _error = e.displayMessage;
           _errorStatusCode = e.statusCode;
           _showRequestRecovery =
-              backendRequestStarted && _shouldShowRequestRecovery(e);
+              backendRequestStarted &&
+              e.securityStatus == null &&
+              _shouldShowRequestRecovery(e);
           _retryAction = _showRequestRecovery ? _signInWithGoogle : null;
+          _applySecurityState(e);
         });
       }
     } on GoogleSignInException catch (e, stackTrace) {
@@ -187,6 +212,36 @@ class _AuthScreenState extends State<AuthScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  void _applySecurityState(ApiException error) {
+    _lockoutTimer?.cancel();
+    _passwordResetRequired = error.passwordResetRequired;
+    _lockoutRemainingSeconds = error.passwordResetRequired
+        ? 0
+        : (error.securityStatus == 'locked'
+              ? (error.retryAfterSeconds ?? 0).clamp(0, 300).toInt()
+              : 0);
+    if (_lockoutRemainingSeconds <= 0) return;
+
+    _lockoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _lockoutRemainingSeconds = (_lockoutRemainingSeconds - 1)
+            .clamp(0, 300)
+            .toInt();
+        if (_lockoutRemainingSeconds == 0) timer.cancel();
+      });
+    });
+  }
+
+  String get _lockoutCountdown {
+    final minutes = (_lockoutRemainingSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (_lockoutRemainingSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 
   OutlineInputBorder _border(Color c, [double w = 1]) => OutlineInputBorder(
@@ -395,11 +450,44 @@ class _AuthScreenState extends State<AuthScreen> {
                       const SizedBox(height: 12),
                       KjmInlineError(message: _error!),
                     ],
+                    if (_lockoutRemainingSeconds > 0) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Login is temporarily locked. You can try again in $_lockoutCountdown.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    if (_passwordResetRequired) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Reset your password to restore access to this account.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : _forgot,
+                        icon: const Icon(Icons.lock_reset_rounded),
+                        label: const Text('Reset password'),
+                      ),
+                    ],
                     const SizedBox(height: 20),
 
                     // ---------- BUTTON ----------
                     FilledButton(
-                      onPressed: _busy ? null : _submit,
+                      onPressed:
+                          _busy ||
+                              _lockoutRemainingSeconds > 0 ||
+                              _passwordResetRequired
+                          ? null
+                          : _submit,
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(56),
                         shape: RoundedRectangleBorder(
@@ -459,7 +547,12 @@ class _AuthScreenState extends State<AuthScreen> {
                           ),
                         ),
                       ),
-                      onTap: _busy ? () {} : _signInWithGoogle,
+                      onTap:
+                          _busy ||
+                              _lockoutRemainingSeconds > 0 ||
+                              _passwordResetRequired
+                          ? () {}
+                          : _signInWithGoogle,
                     ),
 
                     // ---------- OPEN REGISTRATION ----------

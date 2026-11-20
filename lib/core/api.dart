@@ -13,6 +13,9 @@ class ApiException implements Exception {
   final String title;
   final String instruction;
   final bool retryable;
+  final String? securityStatus;
+  final int? retryAfterSeconds;
+  final bool passwordResetRequired;
 
   ApiException(
     this.message, {
@@ -21,6 +24,9 @@ class ApiException implements Exception {
     this.instruction =
         'Please try again. If the problem continues, contact support.',
     this.retryable = false,
+    this.securityStatus,
+    this.retryAfterSeconds,
+    this.passwordResetRequired = false,
   });
 
   String get displayCode => statusCode?.toString() ?? 'N/A';
@@ -418,6 +424,7 @@ class Api {
   ApiException _httpError(int status, dynamic body) {
     String? serverMessage;
     Map<String, dynamic>? validationErrors;
+    Map<String, dynamic>? security;
     if (body is Map) {
       final rawMessage = body['message']?.toString().trim();
       if (rawMessage != null && rawMessage.isNotEmpty) {
@@ -428,6 +435,10 @@ class Api {
       final rawErrors = body['errors'];
       if (rawErrors is Map) {
         validationErrors = Map<String, dynamic>.from(rawErrors);
+      }
+      final rawData = body['data'];
+      if (rawData is Map && rawData['security'] is Map) {
+        security = Map<String, dynamic>.from(rawData['security'] as Map);
       }
     }
 
@@ -542,6 +553,7 @@ class Api {
     final message = switch (status) {
       409 || 422 => firstValidationMessage ?? serverMessage ?? fallback,
       400 => serverMessage ?? fallback,
+      429 when security != null => serverMessage ?? fallback,
       _ => fallback,
     };
 
@@ -551,6 +563,13 @@ class Api {
       title: title,
       instruction: instruction,
       retryable: retryable,
+      securityStatus: security?['status']?.toString(),
+      retryAfterSeconds: int.tryParse(
+        security?['retry_after_seconds']?.toString() ?? '',
+      ),
+      passwordResetRequired:
+          security?['password_reset_required'] == true ||
+          security?['status'] == 'password_reset_required',
     );
   }
 
