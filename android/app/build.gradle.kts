@@ -6,6 +6,15 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Facebook Client Token is a public client configuration value, distinct from
+// the Facebook App Secret. Supply it through -P or the build environment.
+val facebookClientToken = providers.gradleProperty("FACEBOOK_CLIENT_TOKEN")
+    .orElse(providers.environmentVariable("FACEBOOK_CLIENT_TOKEN"))
+    .getOrElse("")
+if (facebookClientToken.isBlank()) {
+    logger.warn("FACEBOOK_CLIENT_TOKEN is not configured; Facebook Login may not initialize correctly.")
+}
+
 android {
     namespace = "com.kjmcoffeebrew.app"
     compileSdk = flutter.compileSdkVersion
@@ -30,6 +39,7 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["facebookClientToken"] = facebookClientToken
     }
 
     buildTypes {

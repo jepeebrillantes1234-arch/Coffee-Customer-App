@@ -21,6 +21,7 @@ Future<void> main() async {
   await Firebase.initializeApp();
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   await Api.I.init();
+  final startupLoginLockout = await Api.I.restoreLoginLockout();
   Api.I.onHttp402 = (retryRequest, serverMessage) => Http402Warning.show(
     navigatorKey: PushNotifications.navigatorKey,
     productionWebsite: AppConfig.productionWebsiteUri,
@@ -50,14 +51,16 @@ Future<void> main() async {
     });
   };
   await AppThemeController.I.load();
-  runApp(const KjmApp());
+  runApp(KjmApp(startupLoginLockout: startupLoginLockout));
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(PushNotifications.I.initialize());
   });
 }
 
 class KjmApp extends StatelessWidget {
-  const KjmApp({super.key});
+  const KjmApp({super.key, this.startupLoginLockout});
+
+  final LoginLockoutState? startupLoginLockout;
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +77,8 @@ class KjmApp extends StatelessWidget {
         home: SplashScreen(
           nextScreen: Api.I.loggedIn
               ? homeForRole(Api.I.role)
+              : startupLoginLockout != null
+              ? AuthScreen(initialLockout: startupLoginLockout)
               : const GetStartedScreen(),
           onCompleted: PushNotifications.I.markNavigationReady,
         ),

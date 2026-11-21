@@ -40,7 +40,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       await Api.I.forgotPassword(_email.text.trim());
       if (mounted) setState(() => _sent = true);
     } on ApiException catch (error) {
-      if (mounted) setState(() => _error = error.displayMessage);
+      if (mounted) {
+        setState(() => _error = switch (error.statusCode) {
+          429 => 'Too many password reset requests. Please wait a moment and try again.',
+          500 => 'Something went wrong. Please try again later.',
+          null => 'Unable to connect to the server. Please try again later.',
+          _ => 'We could not send the reset instructions. Check the email address and try again.',
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(

@@ -15,7 +15,11 @@ class ApiException implements Exception {
   final bool retryable;
   final String? securityStatus;
   final int? retryAfterSeconds;
+  final DateTime? lockedUntil;
+  final int? lockoutDurationSeconds;
+  final int? lockoutCycle;
   final bool passwordResetRequired;
+  final String? authAction;
 
   ApiException(
     this.message, {
@@ -26,7 +30,11 @@ class ApiException implements Exception {
     this.retryable = false,
     this.securityStatus,
     this.retryAfterSeconds,
+    this.lockedUntil,
+    this.lockoutDurationSeconds,
+    this.lockoutCycle,
     this.passwordResetRequired = false,
+    this.authAction,
   });
 
   String get displayCode => statusCode?.toString() ?? 'N/A';
@@ -37,9 +45,113 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+class LoginLockoutState {
+  const LoginLockoutState({
+    required this.identifier,
+    required this.expiresAt,
+    this.durationSeconds = 0,
+    this.cycle = 0,
+  });
+
+  final String identifier;
+  final DateTime expiresAt;
+  final int durationSeconds;
+  final int cycle;
+}
+
 class Api {
   Api._();
   static final Api I = Api._();
+
+  static const _lockoutUntilKey = 'login_lockout_until_ms';
+  static const _lockoutIdentifierKey = 'login_lockout_identifier';
+  static const _lockoutDurationKey = 'login_lockout_duration_seconds';
+  static const _lockoutCycleKey = 'login_lockout_cycle';
+
+  Future<void> saveLoginLockout(LoginLockoutState state) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      _lockoutUntilKey,
+      state.expiresAt.toUtc().millisecondsSinceEpoch,
+    );
+    await prefs.setString(_lockoutIdentifierKey, state.identifier);
+    await prefs.setInt(_lockoutDurationKey, state.durationSeconds);
+    await prefs.setInt(_lockoutCycleKey, state.cycle);
+  }
+
+  Future<LoginLockoutState?> restoreLoginLockout() async {
+    final prefs = await SharedPreferences.getInstance();
+    final timestamp = prefs.getInt(_lockoutUntilKey);
+    if (timestamp == null) return null;
+    final expiresAt = DateTime.fromMillisecondsSinceEpoch(
+      timestamp,
+      isUtc: true,
+    );
+    if (!expiresAt.isAfter(DateTime.now().toUtc())) {
+      await clearLoginLockout();
+      return null;
+    }
+    return LoginLockoutState(
+      identifier: prefs.getString(_lockoutIdentifierKey) ?? '',
+      expiresAt: expiresAt,
+      durationSeconds: prefs.getInt(_lockoutDurationKey) ?? 0,
+      cycle: prefs.getInt(_lockoutCycleKey) ?? 0,
+    );
+  }
+
+  Future<void> clearLoginLockout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_lockoutUntilKey);
+    await prefs.remove(_lockoutIdentifierKey);
+    await prefs.remove(_lockoutDurationKey);
+    await prefs.remove(_lockoutCycleKey);
+  }
+
+  /// Checks the anonymous server-side lockout state without attempting login.
+  /// Laravel returns the same `available` state for unknown and unlocked IDs.
+  Future<LoginLockoutState?> checkLoginLockout(String identifier) async {
+    final response = await _call(
+      'POST',
+      '/auth/lockout-status',
+      body: {'login': identifier.trim()},
+      auth: false,
+      allowConnectionRecovery: false,
+    );
+    final data = response['data'];
+    final security = data is Map ? data['security'] : null;
+    final securityFields = security is Map
+        ? security.keys.map((key) => key.toString()).join(',')
+        : '(none)';
+    debugPrint(
+      'LOGIN SECURITY: POST ${Uri.parse(AppConfig.apiBase).host}/auth/lockout-status '
+      'status=200 security_fields=[$securityFields]',
+    );
+    if (security is! Map || security['status'] != 'locked') return null;
+    final remainingSeconds = _parseSecurityInt(
+      security['remaining_seconds'] ?? security['retry_after_seconds'],
+    );
+    final expiresAt =
+        DateTime.tryParse(security['locked_until']?.toString() ?? '')
+            ?.toUtc() ??
+        (remainingSeconds != null && remainingSeconds > 0
+            ? DateTime.now().toUtc().add(Duration(seconds: remainingSeconds))
+            : null);
+    if (expiresAt == null || !expiresAt.isAfter(DateTime.now().toUtc())) {
+      return null;
+    }
+    return LoginLockoutState(
+      identifier: identifier.trim(),
+      expiresAt: expiresAt,
+      durationSeconds:
+          _parseSecurityInt(
+            security['lockout_duration_seconds'] ??
+                security['duration_seconds'],
+          ) ??
+          remainingSeconds ??
+          0,
+      cycle: _parseSecurityInt(security['lockout_cycle']) ?? 0,
+    );
+  }
 
   final Dio _dio = Dio(
     BaseOptions(
@@ -216,6 +328,21 @@ class Api {
         onSendProgress: onSendProgress,
       );
       final data = res.data;
+      if (path == '/auth/login' || path == '/auth/lockout-status') {
+        final fields = data is Map
+            ? data.keys.map((key) => key.toString()).join(',')
+            : '(non-object)';
+        final rawData = data is Map ? data['data'] : null;
+        final security = rawData is Map ? rawData['security'] : null;
+        final securityFields = security is Map
+            ? security.keys.map((key) => key.toString()).join(',')
+            : '(none)';
+        debugPrint(
+          'LOGIN SECURITY: $method ${Uri.parse(_dio.options.baseUrl).host}$path '
+          'status=${res.statusCode} response_fields=[$fields] '
+          'security_fields=[$securityFields]',
+        );
+      }
       if (data is Map) return Map<String, dynamic>.from(data);
       throw ApiException(
         'The server returned an unexpected response. Check your connection and try again.',
@@ -227,6 +354,21 @@ class Api {
       final code = e.response?.statusCode;
       final d = e.response?.data;
       debugPrint('API ERROR: $method $path | ${e.type} | status=$code');
+      if (path == '/auth/login' || path == '/auth/lockout-status') {
+        final fields = d is Map
+            ? d.keys.map((key) => key.toString()).join(',')
+            : '(non-object)';
+        final rawData = d is Map ? d['data'] : null;
+        final security = rawData is Map ? rawData['security'] : null;
+        final securityFields = security is Map
+            ? security.keys.map((key) => key.toString()).join(',')
+            : '(none)';
+        debugPrint(
+          'LOGIN SECURITY: $method ${Uri.parse(_dio.options.baseUrl).host}$path '
+          'status=$code response_fields=[$fields] '
+          'security_fields=[$securityFields]',
+        );
+      }
 
       if (code == 401 &&
           auth &&
@@ -425,6 +567,7 @@ class Api {
     String? serverMessage;
     Map<String, dynamic>? validationErrors;
     Map<String, dynamic>? security;
+    String? authAction;
     if (body is Map) {
       final rawMessage = body['message']?.toString().trim();
       if (rawMessage != null && rawMessage.isNotEmpty) {
@@ -437,8 +580,13 @@ class Api {
         validationErrors = Map<String, dynamic>.from(rawErrors);
       }
       final rawData = body['data'];
-      if (rawData is Map && rawData['security'] is Map) {
-        security = Map<String, dynamic>.from(rawData['security'] as Map);
+      if (rawData is Map) {
+        if (rawData['security'] is Map) {
+          security = Map<String, dynamic>.from(rawData['security'] as Map);
+        }
+        if (rawData['auth_action'] == 'facebook_email_verification_required') {
+          authAction = rawData['auth_action'] as String;
+        }
       }
     }
 
@@ -564,14 +712,25 @@ class Api {
       instruction: instruction,
       retryable: retryable,
       securityStatus: security?['status']?.toString(),
-      retryAfterSeconds: int.tryParse(
-        security?['retry_after_seconds']?.toString() ?? '',
+      retryAfterSeconds: _parseSecurityInt(
+        security?['retry_after_seconds'] ?? security?['remaining_seconds'],
       ),
+      lockedUntil: DateTime.tryParse(
+        security?['locked_until']?.toString() ?? '',
+      )?.toUtc(),
+      lockoutDurationSeconds: _parseSecurityInt(
+        security?['lockout_duration_seconds'] ?? security?['duration_seconds'],
+      ),
+      lockoutCycle: _parseSecurityInt(security?['lockout_cycle']),
       passwordResetRequired:
           security?['password_reset_required'] == true ||
           security?['status'] == 'password_reset_required',
+      authAction: authAction,
     );
   }
+
+  int? _parseSecurityInt(dynamic value) =>
+      int.tryParse(value?.toString() ?? '');
 
   Future<MultipartFile> _uploadFile(String path, {String? filename}) async {
     try {
@@ -610,12 +769,28 @@ class Api {
   }
 
   Future<void> loginWithGoogle(String idToken) async {
-    final r = await _call(
-      'POST',
-      '/auth/google',
-      body: {'id_token': idToken, 'device_name': 'kjm-google-app'},
-      auth: false,
+    await loginWithFirebaseToken(idToken, deviceName: 'kjm-google-app');
+  }
+
+  Future<void> loginWithFacebook(String idToken) async {
+    await loginWithFirebaseToken(
+      idToken,
+      deviceName: 'kjm-facebook-app',
+      provider: 'facebook',
     );
+  }
+
+  Future<void> loginWithFirebaseToken(
+    String idToken, {
+    required String deviceName,
+    String? provider,
+  }) async {
+    final body = <String, dynamic>{
+      'id_token': idToken,
+      'device_name': deviceName,
+    };
+    if (provider != null) body['provider'] = provider;
+    final r = await _call('POST', '/auth/google', body: body, auth: false);
     final data = Map<String, dynamic>.from(_d(r) as Map);
     await _save(
       data['token'] as String,
