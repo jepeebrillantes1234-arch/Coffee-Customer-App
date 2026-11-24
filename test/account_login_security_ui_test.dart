@@ -13,11 +13,14 @@ class _LoginSecurityAdapter implements HttpClientAdapter {
     this.security, {
     this.statusCode = 429,
     this.connectionFailure = false,
+    this.loginStatuses,
   });
 
   final Map<String, dynamic> security;
   final int statusCode;
   final bool connectionFailure;
+  final List<int>? loginStatuses;
+  int _loginResponseIndex = 0;
   int requests = 0;
   final List<String> requestPaths = [];
   final List<dynamic> requestBodies = [];
@@ -51,7 +54,13 @@ class _LoginSecurityAdapter implements HttpClientAdapter {
         error: 'offline',
       );
     }
-    if (statusCode < 400) {
+    final loginStatus = loginStatuses == null
+        ? statusCode
+        : loginStatuses![_loginResponseIndex < loginStatuses!.length
+              ? _loginResponseIndex
+              : loginStatuses!.length - 1];
+    _loginResponseIndex++;
+    if (loginStatus < 400) {
       return ResponseBody.fromString(
         jsonEncode({
           'success': true,
@@ -62,7 +71,7 @@ class _LoginSecurityAdapter implements HttpClientAdapter {
           },
           'errors': null,
         }),
-        statusCode,
+        loginStatus,
         headers: {
           Headers.contentTypeHeader: ['application/json'],
         },
@@ -72,10 +81,10 @@ class _LoginSecurityAdapter implements HttpClientAdapter {
       requestOptions: options,
       response: Response<dynamic>(
         requestOptions: options,
-        statusCode: statusCode,
+        statusCode: loginStatus,
         data: {
           'success': false,
-          'message': statusCode == 401
+          'message': loginStatus == 401
               ? 'Invalid credentials'
               : security['status'] == 'locked'
               ? 'Too many failed login attempts. Please wait 5 minutes before trying again.'
@@ -166,8 +175,20 @@ void main() {
 
     await submitLogin(tester);
     expect(find.text('Account Temporarily Locked'), findsOneWidget);
+    expect(find.text('Too Many Failed Attempts'), findsOneWidget);
     expect(
-      find.text('Too many unsuccessful login attempts have been detected.'),
+      find.text(
+        'You have entered the wrong password 3 times. Please wait for:',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            widget.image is AssetImage &&
+            (widget.image as AssetImage).assetName == 'assets/images/logo1.png',
+      ),
       findsOneWidget,
     );
     expect(
@@ -175,7 +196,7 @@ void main() {
       matches(RegExp(r'^00:\d{2}$')),
     );
     expect(find.text('Forgot Password?'), findsOneWidget);
-    expect(find.text('OK'), findsOneWidget);
+    expect(find.text('OK'), findsNothing);
     expect(
       tester
           .widget<FilledButton>(find.widgetWithText(FilledButton, 'Log In'))
@@ -184,18 +205,96 @@ void main() {
     );
     expect(adapter.requests, 1);
 
-    final before = tester
-        .widget<Text>(find.byKey(const ValueKey('lockout-countdown')))
-        .data!;
-    await tester.tap(find.text('OK'));
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Account Temporarily Locked'), findsNothing);
-    expect(find.textContaining('temporarily locked'), findsOneWidget);
+    expect(find.text('Account Temporarily Locked'), findsOneWidget);
     expect(adapter.requests, 1);
-    expect(before, matches(RegExp(r'^00:\d{2}$')));
-    expect(find.textContaining('You can try again in'), findsOneWidget);
+    expect(find.text('OK'), findsNothing);
   });
+
+  testWidgets(
+    'three incorrect passwords activate lockout and disable sign-in options',
+    (tester) async {
+      final expiresAt = DateTime.now().toUtc().add(const Duration(minutes: 1));
+      final adapter = _LoginSecurityAdapter(
+        {
+          'status': 'locked',
+          'retry_after_seconds': 60,
+          'lockout_duration_seconds': 60,
+          'lockout_cycle': 1,
+          'locked_until': expiresAt.toIso8601String(),
+          'password_reset_required': false,
+        },
+        loginStatuses: [401, 401, 429],
+      );
+      Api.I.httpClientAdapterForTesting = adapter;
+
+      await tester.pumpWidget(const MaterialApp(home: AuthScreen()));
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), 'customer@example.test');
+      await tester.enterText(fields.at(1), 'wrong-password');
+
+      for (var attempt = 1; attempt <= 3; attempt++) {
+        await tester.ensureVisible(find.text('Log In'));
+        await tester.tap(find.text('Log In'));
+        await tester.pumpAndSettle();
+
+        if (attempt < 3) {
+          expect(find.text('Account Temporarily Locked'), findsNothing);
+          expect(
+            tester
+                .widget<FilledButton>(
+                  find.widgetWithText(FilledButton, 'Log In'),
+                )
+                .onPressed,
+            isNotNull,
+          );
+        }
+      }
+
+      expect(adapter.requests, 3);
+      expect(find.text('Account Temporarily Locked'), findsOneWidget);
+      expect(find.text('Too Many Failed Attempts'), findsOneWidget);
+      expect(
+        find.text(
+          'You have entered the wrong password 3 times. Please wait for:',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining(
+          'Email, Google, and Facebook sign-in are temporarily disabled',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Continue with Google'), findsOneWidget);
+      expect(find.text('Continue with Facebook'), findsOneWidget);
+      expect(find.text('Forgot Password?'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Log In'))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Continue with Google'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Continue with Facebook'),
+            )
+            .onPressed,
+        isNull,
+      );
+    },
+  );
 
   testWidgets('saved lockout is restored after the login screen is recreated', (
     tester,
@@ -212,8 +311,7 @@ void main() {
     Api.I.httpClientAdapterForTesting = adapter;
 
     await submitLogin(tester);
-    await tester.tap(find.text('OK'));
-    await tester.pumpAndSettle();
+    expect(find.text('OK'), findsNothing);
     final saved = await Api.I.restoreLoginLockout();
     expect(saved, isNotNull);
     expect(

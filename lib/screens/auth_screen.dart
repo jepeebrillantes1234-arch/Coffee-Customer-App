@@ -876,7 +876,7 @@ class _AuthScreenState extends State<AuthScreen> with WidgetsBindingObserver {
                             _busy ||
                                 _lockoutRemainingSeconds > 0 ||
                                 _passwordResetRequired
-                            ? () {}
+                            ? null
                             : _signInWithGoogle,
                       ),
                       const SizedBox(height: 12),
@@ -888,7 +888,7 @@ class _AuthScreenState extends State<AuthScreen> with WidgetsBindingObserver {
                           size: 24,
                         ),
                         onTap: _busy || locked || _passwordResetRequired
-                            ? () {}
+                            ? null
                             : _signInWithFacebook,
                       ),
 
@@ -938,7 +938,7 @@ class _AuthScreenState extends State<AuthScreen> with WidgetsBindingObserver {
   Widget _socialButton({
     required String label,
     required Widget icon,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
   }) {
     return OutlinedButton(
       onPressed: onTap,
@@ -1052,78 +1052,153 @@ class _AccountLockoutDialogState extends State<_AccountLockoutDialog> {
     );
     return PopScope(
       canPop: _canClose,
-      child: AlertDialog(
-        icon: Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.errorContainer,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            Icons.security_rounded,
-            color: Theme.of(context).colorScheme.error,
-            size: 30,
-          ),
-        ),
-        title: const Text(
-          'Account Temporarily Locked',
-          textAlign: TextAlign.center,
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Too many unsuccessful login attempts have been detected.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: 132,
-              height: 132,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  TweenAnimationBuilder<double>(
-                    tween: Tween<double>(end: progress),
-                    duration: const Duration(milliseconds: 800),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, _) => SizedBox.expand(
-                      child: CircularProgressIndicator(
-                        value: value,
-                        strokeWidth: 9,
-                        strokeCap: StrokeCap.round,
-                        backgroundColor: Theme.of(context)
-                            .colorScheme
-                            .errorContainer,
-                        color: Theme.of(context).colorScheme.error,
+      child: Dialog(
+        backgroundColor: const Color(0xFFFFFCF8),
+        surfaceTintColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500, maxHeight: 760),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(26, 24, 26, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/images/logo1.png',
+                  width: 112,
+                  height: 112,
+                  fit: BoxFit.contain,
+                  semanticLabel: 'KJM Coffee Shop logo',
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Expanded(child: Divider(color: Color(0xFFE0A13A))),
+                    Container(
+                      width: 52,
+                      height: 52,
+                      margin: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF5A260E),
+                        border: Border.all(
+                          color: const Color(0xFFE0A13A),
+                          width: 2,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.lock_rounded,
+                        color: Colors.white,
+                        size: 27,
                       ),
                     ),
+                    const Expanded(child: Divider(color: Color(0xFFE0A13A))),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Account Temporarily Locked',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF4B210F),
+                    fontSize: 25,
+                    height: 1.12,
+                    fontWeight: FontWeight.w800,
                   ),
-                  Text(
-                    '$minutes:$seconds',
-                    key: const ValueKey('lockout-countdown'),
-                    style: Theme.of(context).textTheme.headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 11,
                   ),
-                ],
-              ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFE4B8),
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: const Text(
+                    'Too Many Failed Attempts',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFF54250F),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'You have entered the wrong password 3 times. Please wait for:',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF54250F),
+                    fontSize: 16,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: 164,
+                  height: 164,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      TweenAnimationBuilder<double>(
+                        tween: Tween<double>(end: progress),
+                        duration: const Duration(milliseconds: 800),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, _) => SizedBox.expand(
+                          child: CircularProgressIndicator(
+                            value: value,
+                            strokeWidth: 11,
+                            strokeCap: StrokeCap.round,
+                            backgroundColor: const Color(0xFF5A260E),
+                            color: const Color(0xFFFFB83F),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '$minutes:$seconds',
+                        key: const ValueKey('lockout-countdown'),
+                        style: const TextStyle(
+                          color: Color(0xFF4B210F),
+                          fontSize: 40,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Email, Google, and Facebook sign-in are temporarily disabled. '
+                  'Forgot Password remains available.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF54250F),
+                    fontSize: 15,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: _openForgotPassword,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF5A260E),
+                    textStyle: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                  child: const Text('Forgot Password?'),
+                ),
+              ],
             ),
-            const SizedBox(height: 14),
-            const Text(
-              'Please wait until the countdown finishes before trying again.',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          TextButton(
-            onPressed: _openForgotPassword,
-            child: const Text('Forgot Password?'),
           ),
-          FilledButton(onPressed: _closeDialog, child: const Text('OK')),
-        ],
+        ),
       ),
     );
   }
